@@ -26,7 +26,7 @@ export function MapView() {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [showSatellite, setShowSatellite] = useState(true);
   const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
-  const [showGibs, setShowGibs] = useState(false); // NASA GIBS GOES-East GeoColor, off by default
+  const [showTrueColor, setShowTrueColor] = useState(false); // EOX Sentinel-2 true color, off by default
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -60,18 +60,15 @@ export function MapView() {
             tileSize: 256,
             attribution: '© NOAA nowCOAST',
           },
-          // NASA GIBS GOES-East GeoColor - TRUE COLOR satellite (10-min updates)
-          'nasa-gibs-geocolor': {
+          // EOX Sentinel-2 Cloudless - TRUE COLOR satellite (annual composite, no auth)
+          'eox-sentinel2': {
             type: 'raster',
             tiles: [
-              // Use today's date for GOES imagery (updates every 10 min)
-              `https://gibs-a.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${new Date().toISOString().split('T')[0]}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.jpg`,
-              `https://gibs-b.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${new Date().toISOString().split('T')[0]}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.jpg`,
-              `https://gibs-c.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${new Date().toISOString().split('T')[0]}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.jpg`,
+              'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg',
             ],
             tileSize: 256,
-            maxzoom: 6,
-            attribution: '© NASA GIBS',
+            maxzoom: 14,
+            attribution: '© EOX Sentinel-2 Cloudless',
           },
         },
         layers: [
@@ -93,11 +90,11 @@ export function MapView() {
             },
           },
           {
-            id: 'gibs-geocolor-layer',
+            id: 'eox-truecolor-layer',
             type: 'raster',
-            source: 'nasa-gibs-geocolor',
+            source: 'eox-sentinel2',
             minzoom: 0,
-            maxzoom: 6,
+            maxzoom: 14,
             layout: {
               visibility: 'none', // Off by default
             },
@@ -236,21 +233,21 @@ export function MapView() {
     }
   }, [showRadar]);
 
-  // Toggle NASA GIBS GeoColor layer visibility
-  const toggleGibs = useCallback(() => {
+  // Toggle EOX Sentinel-2 true color layer visibility
+  const toggleTrueColor = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const newVisibility = !showGibs;
-    setShowGibs(newVisibility);
+    const newVisibility = !showTrueColor;
+    setShowTrueColor(newVisibility);
     try {
-      if (map.getLayer('gibs-geocolor-layer')) {
-        map.setLayoutProperty('gibs-geocolor-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      if (map.getLayer('eox-truecolor-layer')) {
+        map.setLayoutProperty('eox-truecolor-layer', 'visibility', newVisibility ? 'visible' : 'none');
       }
     } catch (err) {
-      console.error('Failed to toggle GIBS:', err);
+      console.error('Failed to toggle true color:', err);
     }
-  }, [showGibs]);
+  }, [showTrueColor]);
 
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
@@ -293,9 +290,9 @@ export function MapView() {
         </button>
 
         <button
-          className={`layer-icon-btn test-btn ${showGibs ? 'active' : ''}`}
-          onClick={toggleGibs}
-          title="NASA GIBS GeoColor (True Color)"
+          className={`layer-icon-btn test-btn ${showTrueColor ? 'active' : ''}`}
+          onClick={toggleTrueColor}
+          title="True Color (EOX Sentinel-2)"
         >
           🌍
         </button>
