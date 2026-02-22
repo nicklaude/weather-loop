@@ -156,7 +156,8 @@
   gap: 12px;
   padding: 12px 16px;
   /* Add safe area inset for mobile browsers with bottom nav bars */
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  /* Use max() to ensure at least 20px on mobile, or safe-area if larger */
+  padding-bottom: max(20px, calc(12px + env(safe-area-inset-bottom, 0px)));
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -315,6 +316,8 @@
 
   .playback-bar {
     padding: 10px 12px;
+    /* Extra padding on mobile for Safari bottom bar */
+    padding-bottom: max(28px, calc(16px + env(safe-area-inset-bottom, 0px)));
     gap: 8px;
   }
 

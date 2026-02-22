@@ -1,0 +1,232 @@
+.debug-page {
+  min-height: 100vh;
+  background: #1a1a2e;
+  color: #eee;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.debug-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.debug-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.debug-header p {
+  margin: 5px 0 0;
+  color: #888;
+}
+
+.debug-summary {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-bottom: 20px;
+}
+
+.summary-item {
+  text-align: center;
+  padding: 15px 25px;
+  background: #2a2a4a;
+  border-radius: 8px;
+}
+
+.summary-item.success .summary-value {
+  color: #5cb85c;
+}
+
+.summary-item.error .summary-value {
+  color: #d9534f;
+}
+
+.summary-value {
+  display: block;
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+.summary-label {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.debug-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.retest-btn {
+  padding: 10px 20px;
+  font-size: 1rem;
+  background: #4a4aff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retest-btn:hover:not(:disabled) {
+  background: #5a5aff;
+}
+
+.retest-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.last-run {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.sources-list {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.source-item {
+  background: #2a2a4a;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 12px;
+  border-left: 4px solid #666;
+}
+
+.source-item.success {
+  border-left-color: #5cb85c;
+}
+
+.source-item.cors-error,
+.source-item.network-error,
+.source-item.timeout {
+  border-left-color: #d9534f;
+}
+
+.source-item.referer-error {
+  border-left-color: #f0ad4e;
+}
+
+.source-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.source-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: white;
+}
+
+.source-details {
+  font-size: 0.9rem;
+}
+
+.source-url {
+  margin-bottom: 8px;
+}
+
+.source-url code {
+  background: #1a1a2e;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  word-break: break-all;
+  color: #aaa;
+}
+
+.response-time {
+  display: inline-block;
+  background: #3a3a5a;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.source-error {
+  background: rgba(217, 83, 79, 0.2);
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: #ff8888;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+.source-headers {
+  margin-top: 8px;
+  background: #1a1a2e;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.header-item {
+  display: flex;
+  gap: 8px;
+  font-size: 0.8rem;
+  margin-bottom: 3px;
+}
+
+.header-key {
+  color: #888;
+}
+
+.header-value {
+  color: #aaa;
+}
+
+.debug-footer {
+  max-width: 900px;
+  margin: 30px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid #333;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.debug-footer p {
+  margin: 5px 0;
+}
+
+.debug-footer a {
+  color: #4a4aff;
+  text-decoration: none;
+  margin-top: 10px;
+  display: inline-block;
+}
+
+.debug-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Loading state animation */
+.source-item.loading {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
