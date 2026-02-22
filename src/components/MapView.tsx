@@ -34,16 +34,6 @@ export function MapView() {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      // Try to strip referer for RealEarth tiles
-      transformRequest: (url) => {
-        if (url.includes('realearth.ssec.wisc.edu')) {
-          return {
-            url,
-            referrerPolicy: 'no-referrer' as ReferrerPolicy,
-          };
-        }
-        return { url };
-      },
       style: {
         version: 8,
         name: 'Weather Loop',
@@ -60,15 +50,14 @@ export function MapView() {
             tileSize: 256,
             attribution: '© CARTO',
           },
-          // RealEarth GOES-19 GEOCOLOR (True Color!)
-          'goes-geocolor': {
+          // nowCOAST GOES visible satellite (grayscale but works from web)
+          'goes-satellite': {
             type: 'raster',
             tiles: [
-              'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-geo-color/{z}/{x}/{y}.png'
+              'https://nowcoast.noaa.gov/geoserver/satellite/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=goes_visible_imagery&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true'
             ],
             tileSize: 256,
-            attribution: '© SSEC/CIMSS RealEarth',
-            maxzoom: 8,
+            attribution: '© NOAA nowCOAST',
           },
         },
         layers: [
@@ -82,11 +71,11 @@ export function MapView() {
           {
             id: 'satellite-layer',
             type: 'raster',
-            source: 'goes-geocolor',
+            source: 'goes-satellite',
             minzoom: 0,
-            maxzoom: 8,
+            maxzoom: 10,
             paint: {
-              'raster-opacity': 0.85,
+              'raster-opacity': 0.7,
             },
           },
         ],
@@ -334,7 +323,7 @@ export function MapView() {
 
       {/* Footer */}
       <div className="map-footer">
-        <span>GOES GeoColor (SSEC) • NEXRAD Radar (RainViewer)</span>
+        <span>NOAA GOES Satellite • NEXRAD Radar</span>
       </div>
     </div>
   );
