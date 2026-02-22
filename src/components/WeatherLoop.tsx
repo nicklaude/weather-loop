@@ -1,6 +1,14 @@
+import { useRef, useCallback } from 'react';
 import { useWeatherLoop } from '../hooks/useWeatherLoop';
 import { SECTORS } from '../lib/goesApi';
 import type { Sector, ImageType } from '../lib/goesApi';
+import {
+  SkipBack,
+  Play,
+  Pause,
+  SkipForward,
+  RefreshCw,
+} from 'lucide-react';
 import './WeatherLoop.css';
 
 const IMAGE_TYPES: { value: ImageType; label: string }[] = [
@@ -19,6 +27,8 @@ const SPEED_OPTIONS = [
 
 export function WeatherLoop() {
   const [state, controls] = useWeatherLoop('ne', 'GEOCOLOR');
+  const framePickerRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number>(0);
 
   const {
     frames,
@@ -33,38 +43,51 @@ export function WeatherLoop() {
     cacheStats,
   } = state;
 
+  // Handle touch/swipe on frame picker
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX.current - touchEndX;
+    const threshold = 30; // minimum swipe distance
+
+    if (Math.abs(diff) > threshold) {
+      if (diff > 0) {
+        // Swipe left - next frame
+        controls.nextFrame();
+      } else {
+        // Swipe right - previous frame
+        controls.prevFrame();
+      }
+    }
+  }, [controls]);
+
   return (
     <div className="weather-loop">
-      <header className="header">
-        <h1>Weather Loop</h1>
-        <p className="subtitle">NOAA GOES-19 Satellite Imagery</p>
-      </header>
-
-      {/* Sector Selection */}
+      {/* Controls Row */}
       <div className="controls-row">
-        <label htmlFor="sector-select">Region:</label>
         <select
           id="sector-select"
           value={sector}
           onChange={(e) => controls.setSector(e.target.value as Sector)}
           disabled={isLoading}
+          className="select-primary"
         >
           {Object.entries(SECTORS).map(([key, info]) => (
             <option key={key} value={key}>
-              {info.name} - {info.description}
+              {info.name}
             </option>
           ))}
         </select>
-      </div>
 
-      {/* Image Type Selection */}
-      <div className="controls-row">
-        <label htmlFor="type-select">Type:</label>
         <select
           id="type-select"
           value={imageType}
           onChange={(e) => controls.setImageType(e.target.value as ImageType)}
           disabled={isLoading}
+          className="select-secondary"
         >
           {IMAGE_TYPES.map((type) => (
             <option key={type.value} value={type.value}>
@@ -75,28 +98,30 @@ export function WeatherLoop() {
       </div>
 
       {/* Main Image Display */}
-      <div className="image-container">
+      <div
+        className="image-container"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {isLoading ? (
           <div className="loading">
-            <div className="loading-text">Loading frames...</div>
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{ width: `${loadingProgress}%` }}
-              />
-            </div>
+            <div className="loading-spinner" />
             <div className="progress-text">{Math.round(loadingProgress)}%</div>
           </div>
         ) : error ? (
           <div className="error">
             <p>{error}</p>
-            <button onClick={controls.refresh}>Retry</button>
+            <button onClick={controls.refresh} className="retry-btn">
+              <RefreshCw size={16} />
+              Retry
+            </button>
           </div>
         ) : frames.length > 0 ? (
           <img
             src={frames[currentFrame]}
-            alt={`Weather satellite frame ${currentFrame + 1} of ${frames.length}`}
+            alt={`Satellite frame ${currentFrame + 1}/${frames.length}`}
             className="satellite-image"
+            draggable={false}
           />
         ) : (
           <div className="no-frames">No frames available</div>
@@ -109,36 +134,36 @@ export function WeatherLoop() {
           onClick={controls.prevFrame}
           disabled={isLoading || frames.length === 0}
           className="control-btn"
-          title="Previous frame"
+          aria-label="Previous frame"
         >
-          ⏮
+          <SkipBack size={20} />
         </button>
 
         <button
           onClick={controls.toggle}
           disabled={isLoading || frames.length === 0}
           className="control-btn play-btn"
-          title={isPlaying ? 'Pause' : 'Play'}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
         >
-          {isPlaying ? '⏸' : '▶'}
+          {isPlaying ? <Pause size={24} /> : <Play size={24} />}
         </button>
 
         <button
           onClick={controls.nextFrame}
           disabled={isLoading || frames.length === 0}
           className="control-btn"
-          title="Next frame"
+          aria-label="Next frame"
         >
-          ⏭
+          <SkipForward size={20} />
         </button>
 
         <button
           onClick={controls.refresh}
           disabled={isLoading}
           className="control-btn"
-          title="Refresh"
+          aria-label="Refresh"
         >
-          🔄
+          <RefreshCw size={20} className={isLoading ? 'spinning' : ''} />
         </button>
       </div>
 
@@ -154,18 +179,19 @@ export function WeatherLoop() {
             className="scrubber"
           />
           <div className="frame-info">
-            Frame {currentFrame + 1} of {frames.length}
+            {currentFrame + 1} / {frames.length}
           </div>
         </div>
       )}
 
       {/* Speed Control */}
-      <div className="controls-row">
-        <label htmlFor="speed-select">Speed:</label>
+      <div className="speed-row">
+        <span className="speed-label">Speed</span>
         <select
           id="speed-select"
           value={speed}
           onChange={(e) => controls.setSpeed(Number(e.target.value))}
+          className="select-small"
         >
           {SPEED_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -175,36 +201,40 @@ export function WeatherLoop() {
         </select>
       </div>
 
-      {/* Frame Picker */}
+      {/* Frame Picker - Swipeable */}
       {frames.length > 0 && (
-        <div className="frame-picker">
-          {frames.map((_, index) => (
-            <button
-              key={index}
-              className={`frame-dot ${index === currentFrame ? 'active' : ''}`}
-              onClick={() => controls.goToFrame(index)}
-              title={`Frame ${index + 1}`}
-            />
-          ))}
+        <div
+          className="frame-picker"
+          ref={framePickerRef}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="frame-dots-container">
+            {frames.map((_, index) => (
+              <button
+                key={index}
+                className={`frame-dot ${index === currentFrame ? 'active' : ''}`}
+                onClick={() => controls.goToFrame(index)}
+                aria-label={`Go to frame ${index + 1}`}
+              />
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Cache Stats */}
-      <div className="cache-stats">
-        Cached: {cacheStats.count} images ({cacheStats.sizeMB} MB)
-      </div>
-
+      {/* Footer */}
       <footer className="footer">
-        <p>
-          Data source:{' '}
-          <a
-            href="https://www.star.nesdis.noaa.gov/goes/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            NOAA NESDIS STAR
-          </a>
-        </p>
+        <span className="cache-stats">
+          {cacheStats.count} frames • {cacheStats.sizeMB} MB
+        </span>
+        <a
+          href="https://www.star.nesdis.noaa.gov/goes/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="source-link"
+        >
+          NOAA GOES-19
+        </a>
       </footer>
     </div>
   );

@@ -29,25 +29,39 @@ export interface SectorInfo {
   name: string;
   description: string;
   approxSizeKB: number;
+  // Some sectors use different path structures
+  pathType: 'sector' | 'direct';
 }
 
 export const SECTORS: Record<Sector, SectorInfo> = {
-  FD: { name: 'Full Disk', description: 'Entire visible Earth', approxSizeKB: 5000 },
-  CONUS: { name: 'CONUS', description: 'Continental United States', approxSizeKB: 2000 },
-  ne: { name: 'Northeast', description: 'Northeast US (New England, Mid-Atlantic)', approxSizeKB: 500 },
-  se: { name: 'Southeast', description: 'Southeast US (Florida, Gulf Coast)', approxSizeKB: 500 },
-  mw: { name: 'Midwest', description: 'Midwest US (Great Lakes, Plains)', approxSizeKB: 500 },
-  nw: { name: 'Northwest', description: 'Northwest US (Pacific Northwest)', approxSizeKB: 500 },
-  sw: { name: 'Southwest', description: 'Southwest US (California, Desert)', approxSizeKB: 500 },
-  gm: { name: 'Gulf of Mexico', description: 'Gulf of Mexico region', approxSizeKB: 500 },
-  car: { name: 'Caribbean', description: 'Caribbean Sea region', approxSizeKB: 500 },
-  ak: { name: 'Alaska', description: 'Alaska', approxSizeKB: 500 },
-  hi: { name: 'Hawaii', description: 'Hawaiian Islands', approxSizeKB: 200 },
-  pr: { name: 'Puerto Rico', description: 'Puerto Rico & Virgin Islands', approxSizeKB: 200 },
+  FD: { name: 'Full Disk', description: 'Entire visible Earth', approxSizeKB: 5000, pathType: 'direct' },
+  CONUS: { name: 'CONUS', description: 'Continental United States', approxSizeKB: 2000, pathType: 'direct' },
+  ne: { name: 'Northeast', description: 'New England & Mid-Atlantic', approxSizeKB: 500, pathType: 'sector' },
+  se: { name: 'Southeast', description: 'Florida & Gulf Coast', approxSizeKB: 500, pathType: 'sector' },
+  mw: { name: 'Midwest', description: 'Great Lakes & Plains', approxSizeKB: 500, pathType: 'sector' },
+  nw: { name: 'Northwest', description: 'Pacific Northwest', approxSizeKB: 500, pathType: 'sector' },
+  sw: { name: 'Southwest', description: 'California & Desert SW', approxSizeKB: 500, pathType: 'sector' },
+  gm: { name: 'Gulf of Mexico', description: 'Gulf of Mexico', approxSizeKB: 500, pathType: 'sector' },
+  car: { name: 'Caribbean', description: 'Caribbean Sea', approxSizeKB: 500, pathType: 'sector' },
+  ak: { name: 'Alaska', description: 'Alaska', approxSizeKB: 500, pathType: 'sector' },
+  hi: { name: 'Hawaii', description: 'Hawaiian Islands', approxSizeKB: 200, pathType: 'sector' },
+  pr: { name: 'Puerto Rico', description: 'Puerto Rico & USVI', approxSizeKB: 200, pathType: 'sector' },
 };
 
 // Base CDN URL
 const CDN_BASE = 'https://cdn.star.nesdis.noaa.gov';
+
+// Get the correct path for a sector based on its type
+function getSectorPath(sector: Sector, satellite: Satellite): string {
+  const info = SECTORS[sector];
+  if (info.pathType === 'direct') {
+    // CONUS and FD use: /GOES19/ABI/CONUS/GEOCOLOR/
+    return `${CDN_BASE}/${satellite}/ABI/${sector}`;
+  } else {
+    // Regional sectors use: /GOES19/ABI/SECTOR/ne/GEOCOLOR/
+    return `${CDN_BASE}/${satellite}/ABI/SECTOR/${sector}`;
+  }
+}
 
 // Build URL for latest image
 export function getLatestImageUrl(
@@ -55,7 +69,7 @@ export function getLatestImageUrl(
   imageType: ImageType = 'GEOCOLOR',
   satellite: Satellite = 'GOES19'
 ): string {
-  return `${CDN_BASE}/${satellite}/ABI/SECTOR/${sector}/${imageType}/latest.jpg`;
+  return `${getSectorPath(sector, satellite)}/${imageType}/latest.jpg`;
 }
 
 // Get the directory URL for a sector/type combination
@@ -64,7 +78,7 @@ export function getDirectoryUrl(
   imageType: ImageType = 'GEOCOLOR',
   satellite: Satellite = 'GOES19'
 ): string {
-  return `${CDN_BASE}/${satellite}/ABI/SECTOR/${sector}/${imageType}/`;
+  return `${getSectorPath(sector, satellite)}/${imageType}/`;
 }
 
 // Parse directory listing to get available image URLs
