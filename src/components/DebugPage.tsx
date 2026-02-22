@@ -154,14 +154,14 @@ async function testSource(source: Omit<SourceTest, 'status'>): Promise<SourceTes
       };
     }
 
-    // For JSON, try to parse
+    // For JSON, try to parse (also accept XML for capabilities docs)
     if (source.type === 'json') {
+      const text = await response.text();
+      // Try JSON parse, or accept if it's XML
       try {
-        await response.json();
+        JSON.parse(text);
       } catch {
-        // XML is fine too (capabilities doc)
-        const text = await response.text();
-        if (!text.includes('<?xml')) {
+        if (!text.includes('<?xml') && !text.includes('<Capabilities')) {
           return {
             ...source,
             status: 'network-error',
