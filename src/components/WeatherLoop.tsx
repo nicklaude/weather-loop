@@ -26,7 +26,7 @@ const SPEED_OPTIONS = [
 ];
 
 export function WeatherLoop() {
-  const [state, controls] = useWeatherLoop('ne', 'GEOCOLOR');
+  const [state, controls] = useWeatherLoop('northeast', 'GEOCOLOR');
   const framePickerRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number>(0);
 
@@ -136,7 +136,7 @@ export function WeatherLoop() {
           className="control-btn"
           aria-label="Previous frame"
         >
-          <SkipBack size={20} />
+          <SkipBack size={24} />
         </button>
 
         <button
@@ -145,7 +145,7 @@ export function WeatherLoop() {
           className="control-btn play-btn"
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
-          {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+          {isPlaying ? <Pause size={28} /> : <Play size={28} />}
         </button>
 
         <button
@@ -154,7 +154,7 @@ export function WeatherLoop() {
           className="control-btn"
           aria-label="Next frame"
         >
-          <SkipForward size={20} />
+          <SkipForward size={24} />
         </button>
 
         <button
@@ -163,7 +163,7 @@ export function WeatherLoop() {
           className="control-btn"
           aria-label="Refresh"
         >
-          <RefreshCw size={20} className={isLoading ? 'spinning' : ''} />
+          <RefreshCw size={24} className={isLoading ? 'spinning' : ''} />
         </button>
       </div>
 

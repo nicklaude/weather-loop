@@ -33,7 +33,7 @@ const DEFAULT_FRAME_COUNT = 24; // ~2 hours at 5-min intervals
 const DEFAULT_SPEED = 150; // ms between frames
 
 export function useWeatherLoop(
-  initialSector: Sector = 'ne',
+  initialSector: Sector = 'northeast',
   initialImageType: ImageType = 'GEOCOLOR'
 ): [LoopState, LoopControls] {
   const [frames, setFrames] = useState<string[]>([]);
@@ -60,12 +60,10 @@ export function useWeatherLoop(
       // Clear old cache entries
       await clearOldCache();
 
-      // Fetch available image URLs from the directory
+      // Fetch available image URLs from the directory (auto-discovers resolution)
       const imageUrls = await fetchAvailableImages(
         sector,
         imageType,
-        'GOES19',
-        '1200x1200',
         DEFAULT_FRAME_COUNT
       );
 
