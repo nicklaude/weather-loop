@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MapLibre GL Globe + Satellite + Radar</title>
+    <script src="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; font-family: -apple-system, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .controls {
+            position: absolute;
+            top: env(safe-area-inset-top, 10px);
+            left: 10px;
+            right: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+            padding-top: 10px;
+            flex-wrap: wrap;
+        }
+        .control-btn {
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .control-btn.active {
+            background: linear-gradient(135deg, #60a5fa, #34d399);
+            color: black;
+            border-color: transparent;
+        }
+        .control-btn.radar-active {
+            background: linear-gradient(135deg, #f97316, #ef4444);
+            color: white;
+        }
+        .info-box {
+            position: absolute;
+            bottom: 80px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        .info-box .title { font-weight: 600; margin-bottom: 4px; }
+        .info-box .detail { color: #888; }
+        .time-slider {
+            position: absolute;
+            bottom: 160px;
+            left: 10px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+        }
+        .time-slider.visible { display: block; }
+        .time-slider input[type="range"] {
+            width: 100%;
+            margin: 8px 0;
+        }
+        .time-label {
+            color: white;
+            font-size: 12px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button class="control-btn active" id="btn-satellite">Satellite</button>
+        <button class="control-btn" id="btn-radar">Radar</button>
+        <button class="control-btn" id="btn-both">Both</button>
+        <button class="control-btn" id="btn-play">▶️ Play</button>
+    </div>
+    <div class="time-slider" id="time-slider">
+        <div class="time-label" id="time-label">Loading radar frames...</div>
+        <input type="range" min="0" max="11" value="11" id="frame-slider">
+    </div>
+    <div class="info-box">
+        <div class="title" id="status">Loading globe...</div>
+        <div class="detail" id="detail">MapLibre GL + NOAA Satellite + RainViewer Radar</div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const detailEl = document.getElementById('detail');
+        const timeSlider = document.getElementById('time-slider');
+        const frameSlider = document.getElementById('frame-slider');
+        const timeLabel = document.getElementById('time-label');
+
+        let radarFrames = [];
+        let currentFrame = 0;
+        let isPlaying = false;
+        let playInterval = null;
+        let radarVisible = false;
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                name: 'Weather Globe',
+                sources: {
+                    'arcgis-satellite': {
+                        type: 'raster',
+                        tiles: [
+                            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                        ],
+                        tileSize: 256,
+                        maxzoom: 18
+                    },
+                    'goes-visible': {
+                        type: 'raster',
+                        tiles: [
+                            'https://nowcoast.noaa.gov/geoserver/satellite/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=goes_visible_imagery&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&STYLES=&BBOX={bbox-epsg-3857}'
+                        ],
+                        tileSize: 256
+                    }
+                },
+                layers: [
+                    {
+                        id: 'background',
+                        type: 'background',
+                        paint: { 'background-color': '#000' }
+                    },
+                    {
+                        id: 'base-satellite',
+                        type: 'raster',
+                        source: 'arcgis-satellite',
+                        paint: { 'raster-opacity': 0.5 }
+                    },
+                    {
+                        id: 'goes-visible-layer',
+                        type: 'raster',
+                        source: 'goes-visible',
+                        paint: { 'raster-opacity': 1 }
+                    }
+                ],
+                sky: {
+                    'atmosphere-blend': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        0, 1,
+                        5, 1,
+                        7, 0
+                    ]
+                },
+                projection: {
+                    type: 'globe'
+                }
+            },
+            center: [140, 35],  // Asia/Pacific
+            zoom: 1.5,
+            maxPitch: 85
+        });
+
+        // Fetch RainViewer radar frames
+        async function loadRadarFrames() {
+            try {
+                const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+                const data = await response.json();
+
+                // Get past radar frames (last 2 hours)
+                radarFrames = data.radar.past.slice(-12);
+
+                if (radarFrames.length > 0) {
+                    frameSlider.max = radarFrames.length - 1;
+                    frameSlider.value = radarFrames.length - 1;
+                    currentFrame = radarFrames.length - 1;
+                    updateTimeLabel();
+                }
+
+                return data.host;
+            } catch (error) {
+                console.error('Failed to load radar frames:', error);
+                return null;
+            }
+        }
+
+        function updateTimeLabel() {
+            if (radarFrames.length > 0) {
+                const timestamp = radarFrames[currentFrame].time;
+                const date = new Date(timestamp * 1000);
+                timeLabel.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+        }
+
+        function buildRadarTileUrl(frame, host) {
+            // RainViewer tile URL format:
+            // {host}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
+            // color 6 = classic color scheme
+            // smooth 1 = smoothed, snow 1 = show snow
+            return `${host}${frame.path}/256/{z}/{x}/{y}/6/1_1.png`;
+        }
+
+        map.on('load', async () => {
+            statusEl.textContent = '✅ Globe loaded';
+            detailEl.textContent = 'Loading radar data...';
+
+            const host = await loadRadarFrames();
+
+            if (host && radarFrames.length > 0) {
+                // Add radar source for current frame
+                map.addSource('radar', {
+                    type: 'raster',
+                    tiles: [buildRadarTileUrl(radarFrames[currentFrame], host)],
+                    tileSize: 256,
+                    maxzoom: 7
+                });
+
+                map.addLayer({
+                    id: 'radar-layer',
+                    type: 'raster',
+                    source: 'radar',
+                    paint: { 'raster-opacity': 0 }
+                });
+
+                // Store host for later use
+                window.radarHost = host;
+
+                detailEl.textContent = `Satellite + Radar • ${radarFrames.length} frames available`;
+            } else {
+                detailEl.textContent = 'Satellite only (radar unavailable)';
+            }
+        });
+
+        map.on('error', (e) => {
+            console.error('Map error:', e);
+        });
+
+        // Update radar frame
+        function setRadarFrame(index) {
+            if (!window.radarHost || radarFrames.length === 0) return;
+
+            currentFrame = index;
+            const source = map.getSource('radar');
+            if (source) {
+                source.setTiles([buildRadarTileUrl(radarFrames[index], window.radarHost)]);
+            }
+            updateTimeLabel();
+        }
+
+        // Button handlers
+        function setActiveButton(id) {
+            document.querySelectorAll('.control-btn').forEach(b => {
+                if (b.id !== 'btn-play') b.classList.remove('active', 'radar-active');
+            });
+            document.getElementById(id).classList.add('active');
+        }
+
+        document.getElementById('btn-satellite').addEventListener('click', function() {
+            setActiveButton('btn-satellite');
+            map.setPaintProperty('goes-visible-layer', 'raster-opacity', 1);
+            map.setPaintProperty('radar-layer', 'raster-opacity', 0);
+            timeSlider.classList.remove('visible');
+            radarVisible = false;
+            statusEl.textContent = '🛰️ GOES Satellite';
+            detailEl.textContent = 'Visible light imagery • Updated every 5 min';
+        });
+
+        document.getElementById('btn-radar').addEventListener('click', function() {
+            setActiveButton('btn-radar');
+            this.classList.add('radar-active');
+            map.setPaintProperty('goes-visible-layer', 'raster-opacity', 0);
+            map.setPaintProperty('radar-layer', 'raster-opacity', 0.8);
+            timeSlider.classList.add('visible');
+            radarVisible = true;
+            statusEl.textContent = '🌧️ Radar';
+            detailEl.textContent = 'RainViewer global radar • Max zoom level 7';
+        });
+
+        document.getElementById('btn-both').addEventListener('click', function() {
+            setActiveButton('btn-both');
+            this.classList.add('radar-active');
+            map.setPaintProperty('goes-visible-layer', 'raster-opacity', 0.7);
+            map.setPaintProperty('radar-layer', 'raster-opacity', 0.6);
+            timeSlider.classList.add('visible');
+            radarVisible = true;
+            statusEl.textContent = '🛰️🌧️ Satellite + Radar';
+            detailEl.textContent = 'Combined weather view';
+        });
+
+        document.getElementById('btn-play').addEventListener('click', function() {
+            if (!radarVisible) {
+                document.getElementById('btn-both').click();
+            }
+
+            isPlaying = !isPlaying;
+            this.textContent = isPlaying ? '⏸️ Pause' : '▶️ Play';
+
+            if (isPlaying) {
+                playInterval = setInterval(() => {
+                    currentFrame = (currentFrame + 1) % radarFrames.length;
+                    frameSlider.value = currentFrame;
+                    setRadarFrame(currentFrame);
+                }, 500);
+            } else {
+                clearInterval(playInterval);
+            }
+        });
+
+        frameSlider.addEventListener('input', function() {
+            setRadarFrame(parseInt(this.value));
+        });
+
+        // Auto-demo: show combined view after load
+        setTimeout(() => {
+            document.getElementById('btn-both').click();
+        }, 3000);
+    </script>
+</body>
+</html>

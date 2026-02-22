@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MapLibre GL Globe + GOES GEOCOLOR</title>
+    <script src="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; font-family: -apple-system, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .controls {
+            position: absolute;
+            top: env(safe-area-inset-top, 10px);
+            left: 10px;
+            right: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+            padding-top: 10px;
+            flex-wrap: wrap;
+        }
+        .control-btn {
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .control-btn.active {
+            background: linear-gradient(135deg, #60a5fa, #34d399);
+            color: black;
+            border-color: transparent;
+        }
+        .info-box {
+            position: absolute;
+            bottom: 80px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        .info-box .title { font-weight: 600; margin-bottom: 4px; }
+        .info-box .detail { color: #888; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button class="control-btn active" id="btn-base">Base</button>
+        <button class="control-btn" id="btn-geocolor">GeoColor</button>
+        <button class="control-btn" id="btn-both">Overlay</button>
+    </div>
+    <div class="info-box">
+        <div class="title" id="status">Loading globe...</div>
+        <div class="detail" id="detail">MapLibre GL + GOES-19 GEOCOLOR</div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const detailEl = document.getElementById('detail');
+
+        // GOES-19 Northeast GEOCOLOR from NOAA CDN
+        // These bounds are estimated and may need adjustment
+        // Northeast sector covers roughly New England to Virginia, Atlantic coast
+        const GOES_NE_URL = 'https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/ne/GEOCOLOR/1200x1200.jpg';
+
+        // Estimated bounds for NE sector (will refine with visual testing)
+        // Format: [lon, lat] for each corner
+        // top-left, top-right, bottom-right, bottom-left
+        const NE_BOUNDS = {
+            topLeft: [-82.5, 50.0],
+            topRight: [-64.5, 50.0],
+            bottomRight: [-64.5, 35.0],
+            bottomLeft: [-82.5, 35.0]
+        };
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                name: 'Weather Globe',
+                sources: {
+                    'arcgis-satellite': {
+                        type: 'raster',
+                        tiles: [
+                            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                        ],
+                        tileSize: 256,
+                        maxzoom: 18
+                    }
+                },
+                layers: [
+                    {
+                        id: 'background',
+                        type: 'background',
+                        paint: { 'background-color': '#000' }
+                    },
+                    {
+                        id: 'base-satellite',
+                        type: 'raster',
+                        source: 'arcgis-satellite',
+                        paint: { 'raster-opacity': 1 }
+                    }
+                ],
+                sky: {
+                    'atmosphere-blend': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        0, 1,
+                        5, 1,
+                        7, 0
+                    ]
+                },
+                projection: {
+                    type: 'globe'
+                }
+            },
+            center: [-73, 42],  // Massachusetts area
+            zoom: 4,
+            maxPitch: 85
+        });
+
+        map.on('load', () => {
+            statusEl.textContent = '✅ Globe loaded';
+            detailEl.textContent = 'Loading GEOCOLOR image...';
+
+            // Add GOES NE GEOCOLOR as image source
+            map.addSource('goes-geocolor', {
+                type: 'image',
+                url: GOES_NE_URL + '?t=' + Date.now(),  // Cache bust
+                coordinates: [
+                    NE_BOUNDS.topLeft,      // Top-left
+                    NE_BOUNDS.topRight,     // Top-right
+                    NE_BOUNDS.bottomRight,  // Bottom-right
+                    NE_BOUNDS.bottomLeft    // Bottom-left
+                ]
+            });
+
+            map.addLayer({
+                id: 'geocolor-layer',
+                type: 'raster',
+                source: 'goes-geocolor',
+                paint: {
+                    'raster-opacity': 0,
+                    'raster-fade-duration': 300
+                }
+            });
+
+            detailEl.textContent = 'Tap GeoColor or Overlay to see weather';
+        });
+
+        map.on('error', (e) => {
+            console.error('Map error:', e);
+            statusEl.textContent = '❌ Error: ' + (e.error?.message || 'Unknown');
+        });
+
+        // Button handlers
+        function setActiveButton(id) {
+            document.querySelectorAll('.control-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        document.getElementById('btn-base').addEventListener('click', function() {
+            setActiveButton('btn-base');
+            map.setPaintProperty('base-satellite', 'raster-opacity', 1);
+            map.setPaintProperty('geocolor-layer', 'raster-opacity', 0);
+            statusEl.textContent = '🛰️ Base Satellite';
+            detailEl.textContent = 'ArcGIS World Imagery';
+        });
+
+        document.getElementById('btn-geocolor').addEventListener('click', function() {
+            setActiveButton('btn-geocolor');
+            map.setPaintProperty('base-satellite', 'raster-opacity', 0.2);
+            map.setPaintProperty('geocolor-layer', 'raster-opacity', 1);
+            statusEl.textContent = '🌈 GOES-19 GeoColor';
+            detailEl.textContent = 'True color composite • Northeast sector';
+        });
+
+        document.getElementById('btn-both').addEventListener('click', function() {
+            setActiveButton('btn-both');
+            map.setPaintProperty('base-satellite', 'raster-opacity', 0.5);
+            map.setPaintProperty('geocolor-layer', 'raster-opacity', 0.7);
+            statusEl.textContent = '🌈 GeoColor Overlay';
+            detailEl.textContent = 'Blended view for alignment check';
+        });
+
+        // Auto-show overlay after load for alignment check
+        setTimeout(() => {
+            document.getElementById('btn-both').click();
+        }, 3000);
+    </script>
+</body>
+</html>

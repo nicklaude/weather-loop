@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Play, Pause, RefreshCw, Cloud, CloudRain, Eye, EyeOff } from 'lucide-react';
+import { Play, Pause, RefreshCw } from 'lucide-react';
 import './MapView.css';
 
 // RainViewer API for pre-tiled radar
@@ -50,14 +50,15 @@ export function MapView() {
             tileSize: 256,
             attribution: '© CARTO',
           },
-          // nowCOAST GOES visible satellite
-          'goes-satellite': {
+          // RealEarth GOES-19 GEOCOLOR (True Color!)
+          'goes-geocolor': {
             type: 'raster',
             tiles: [
-              'https://nowcoast.noaa.gov/geoserver/satellite/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=goes_visible_imagery&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true'
+              'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-geo-color/{z}/{x}/{y}.png'
             ],
             tileSize: 256,
-            attribution: '© NOAA nowCOAST',
+            attribution: '© SSEC/CIMSS RealEarth',
+            maxzoom: 8,
           },
         },
         layers: [
@@ -71,11 +72,11 @@ export function MapView() {
           {
             id: 'satellite-layer',
             type: 'raster',
-            source: 'goes-satellite',
+            source: 'goes-geocolor',
             minzoom: 0,
-            maxzoom: 10,
+            maxzoom: 8,
             paint: {
-              'raster-opacity': 0.7,
+              'raster-opacity': 0.85,
             },
           },
         ],
@@ -93,7 +94,10 @@ export function MapView() {
 
     map.on('error', (e) => {
       console.error('Map error:', e);
-      setError(e.error?.message || 'Map loading error');
+      // Don't show error for tile loading issues
+      if (!e.error?.message?.includes('tile')) {
+        setError(e.error?.message || 'Map loading error');
+      }
     });
 
     mapRef.current = map;
@@ -109,12 +113,14 @@ export function MapView() {
     const fetchRadarFrames = async () => {
       try {
         const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+        if (!response.ok) throw new Error('Failed to fetch radar data');
         const data: RainViewerData = await response.json();
         const frames = [...data.radar.past, ...data.radar.nowcast];
         setRadarFrames(frames);
         setCurrentFrameIndex(data.radar.past.length - 1); // Start at most recent actual
       } catch (err) {
         console.error('Failed to fetch radar frames:', err);
+        // Don't show error to user, radar is optional
       }
     };
 
@@ -135,27 +141,31 @@ export function MapView() {
     // Color scheme 2 = original, smooth=1, snow=1
     const radarUrl = `https://tilecache.rainviewer.com${currentFrame.path}/256/{z}/{x}/{y}/2/1_1.png`;
 
-    if (map.getSource('radar')) {
-      // Update existing source
-      (map.getSource('radar') as maplibregl.RasterTileSource).setTiles([radarUrl]);
-    } else {
-      // Add radar source and layer
-      map.addSource('radar', {
-        type: 'raster',
-        tiles: [radarUrl],
-        tileSize: 256,
-      });
+    try {
+      if (map.getSource('radar')) {
+        // Update existing source
+        (map.getSource('radar') as maplibregl.RasterTileSource).setTiles([radarUrl]);
+      } else {
+        // Add radar source and layer
+        map.addSource('radar', {
+          type: 'raster',
+          tiles: [radarUrl],
+          tileSize: 256,
+        });
 
-      map.addLayer({
-        id: 'radar-layer',
-        type: 'raster',
-        source: 'radar',
-        minzoom: 0,
-        maxzoom: 12,
-        paint: {
-          'raster-opacity': 0.75,
-        },
-      });
+        map.addLayer({
+          id: 'radar-layer',
+          type: 'raster',
+          source: 'radar',
+          minzoom: 0,
+          maxzoom: 12,
+          paint: {
+            'raster-opacity': 0.75,
+          },
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update radar layer:', err);
     }
   }, [radarFrames, currentFrameIndex]);
 
@@ -177,17 +187,27 @@ export function MapView() {
 
     const newVisibility = !showSatellite;
     setShowSatellite(newVisibility);
-    map.setLayoutProperty('satellite-layer', 'visibility', newVisibility ? 'visible' : 'none');
+    try {
+      map.setLayoutProperty('satellite-layer', 'visibility', newVisibility ? 'visible' : 'none');
+    } catch (err) {
+      console.error('Failed to toggle satellite:', err);
+    }
   }, [showSatellite]);
 
   // Toggle radar visibility
   const toggleRadar = useCallback(() => {
     const map = mapRef.current;
-    if (!map || !map.getLayer('radar-layer')) return;
+    if (!map) return;
 
     const newVisibility = !showRadar;
     setShowRadar(newVisibility);
-    map.setLayoutProperty('radar-layer', 'visibility', newVisibility ? 'visible' : 'none');
+    try {
+      if (map.getLayer('radar-layer')) {
+        map.setLayoutProperty('radar-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle radar:', err);
+    }
   }, [showRadar]);
 
   // Get timestamp for current frame
@@ -212,16 +232,16 @@ export function MapView() {
 
   return (
     <div className="map-view">
-      {/* Layer Controls */}
+      {/* Layer Controls - Text-based for mobile compatibility */}
       <div className="layer-controls">
         <button
           className={`layer-btn ${showSatellite ? 'active' : ''}`}
           onClick={toggleSatellite}
           title="Toggle Satellite"
         >
-          {showSatellite ? <Eye size={16} /> : <EyeOff size={16} />}
-          <Cloud size={16} />
-          <span>Satellite</span>
+          <span className="layer-icon">🛰️</span>
+          <span className="layer-label">Satellite</span>
+          <span className="layer-status">{showSatellite ? 'ON' : 'OFF'}</span>
         </button>
 
         <button
@@ -229,9 +249,9 @@ export function MapView() {
           onClick={toggleRadar}
           title="Toggle Radar"
         >
-          {showRadar ? <Eye size={16} /> : <EyeOff size={16} />}
-          <CloudRain size={16} />
-          <span>Radar</span>
+          <span className="layer-icon">🌧️</span>
+          <span className="layer-label">Radar</span>
+          <span className="layer-status">{showRadar ? 'ON' : 'OFF'}</span>
         </button>
       </div>
 
@@ -304,7 +324,7 @@ export function MapView() {
 
       {/* Footer */}
       <div className="map-footer">
-        <span>NOAA GOES Satellite • NEXRAD Radar</span>
+        <span>GOES GeoColor (SSEC) • NEXRAD Radar (RainViewer)</span>
       </div>
     </div>
   );
