@@ -454,13 +454,13 @@ export function MapView() {
     }
   }, [radarFrames, currentFrameIndex]);
 
-  // Animation loop
+  // Animation loop - use longer interval to avoid CORS/rate limit issues
   useEffect(() => {
     if (!isPlaying || radarFrames.length === 0) return;
 
     const interval = setInterval(() => {
       setCurrentFrameIndex(prev => (prev + 1) % radarFrames.length);
-    }, 600); // Slower animation to reduce tile requests
+    }, 800); // 800ms between frames to avoid rate limiting
 
     return () => clearInterval(interval);
   }, [isPlaying, radarFrames.length]);

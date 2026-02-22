@@ -3,7 +3,10 @@
   background: #1a1a2e;
   color: #eee;
   padding: 20px;
+  padding-bottom: 100px; /* Extra padding for scroll */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
 }
 
 .debug-header {
