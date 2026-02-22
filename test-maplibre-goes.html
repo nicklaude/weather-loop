@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MapLibre GL Globe + GOES Satellite</title>
+    <script src="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; font-family: -apple-system, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .controls {
+            position: absolute;
+            top: env(safe-area-inset-top, 10px);
+            left: 10px;
+            right: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+            padding-top: 10px;
+        }
+        .control-btn {
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .control-btn.active {
+            background: linear-gradient(135deg, #60a5fa, #34d399);
+            color: black;
+            border-color: transparent;
+        }
+        .info-box {
+            position: absolute;
+            bottom: 80px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        .info-box .title { font-weight: 600; margin-bottom: 4px; }
+        .info-box .detail { color: #888; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button class="control-btn active" id="btn-satellite">Satellite</button>
+        <button class="control-btn" id="btn-goes">GOES Weather</button>
+    </div>
+    <div class="info-box">
+        <div class="title" id="status">Loading globe...</div>
+        <div class="detail" id="detail">MapLibre GL JS 5.x + Globe Projection</div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const detailEl = document.getElementById('detail');
+
+        // GOES Full Disk latest image URL (GEOCOLOR)
+        // Format: https://cdn.star.nesdis.noaa.gov/GOES19/ABI/FD/GEOCOLOR/latest.jpg
+        const GOES_URL = 'https://cdn.star.nesdis.noaa.gov/GOES19/ABI/FD/GEOCOLOR/1808x1808.jpg';
+
+        // GOES-19 Full Disk covers Western Hemisphere
+        // Approximate bounds for GOES-19 FD (centered at -75.2° lon)
+        const GOES_BOUNDS = [
+            [-165, -81],  // Southwest (lon, lat)
+            [15, 81]      // Northeast (lon, lat)
+        ];
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                name: 'Weather Globe',
+                sources: {
+                    'arcgis-satellite': {
+                        type: 'raster',
+                        tiles: [
+                            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                        ],
+                        tileSize: 256,
+                        maxzoom: 18
+                    }
+                },
+                layers: [
+                    {
+                        id: 'background',
+                        type: 'background',
+                        paint: { 'background-color': '#000' }
+                    },
+                    {
+                        id: 'satellite-layer',
+                        type: 'raster',
+                        source: 'arcgis-satellite',
+                        paint: { 'raster-opacity': 1 }
+                    }
+                ],
+                sky: {
+                    'atmosphere-blend': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        0, 1,
+                        5, 1,
+                        7, 0
+                    ]
+                },
+                projection: {
+                    type: 'globe'
+                }
+            },
+            center: [-98, 39],
+            zoom: 2,
+            // Safari stability fix
+            maxPitch: 85
+        });
+
+        let goesLayerVisible = false;
+
+        map.on('load', () => {
+            statusEl.textContent = '✅ Globe loaded';
+            detailEl.textContent = 'Pan/zoom to explore • Tap buttons to toggle layers';
+
+            // Add GOES as image source (single image overlay)
+            map.addSource('goes-satellite', {
+                type: 'image',
+                url: GOES_URL,
+                coordinates: [
+                    [-165, 81],   // Top-left
+                    [15, 81],     // Top-right
+                    [15, -81],    // Bottom-right
+                    [-165, -81]   // Bottom-left
+                ]
+            });
+
+            map.addLayer({
+                id: 'goes-layer',
+                type: 'raster',
+                source: 'goes-satellite',
+                paint: {
+                    'raster-opacity': 0,
+                    'raster-fade-duration': 300
+                }
+            });
+        });
+
+        map.on('error', (e) => {
+            statusEl.textContent = '❌ Error: ' + (e.error?.message || 'Unknown');
+        });
+
+        // Auto-switch to GOES after 2 seconds for demo
+        setTimeout(() => {
+            document.getElementById('btn-goes').click();
+        }, 2000);
+
+        // Button handlers
+        document.getElementById('btn-satellite').addEventListener('click', function() {
+            this.classList.add('active');
+            document.getElementById('btn-goes').classList.remove('active');
+            map.setPaintProperty('satellite-layer', 'raster-opacity', 1);
+            map.setPaintProperty('goes-layer', 'raster-opacity', 0);
+            statusEl.textContent = '🛰️ ArcGIS Satellite';
+            detailEl.textContent = 'High-res base imagery';
+        });
+
+        document.getElementById('btn-goes').addEventListener('click', function() {
+            this.classList.add('active');
+            document.getElementById('btn-satellite').classList.remove('active');
+            map.setPaintProperty('satellite-layer', 'raster-opacity', 0.3);
+            map.setPaintProperty('goes-layer', 'raster-opacity', 1);
+            statusEl.textContent = '🌧️ NOAA GOES-19 GEOCOLOR';
+            detailEl.textContent = 'Live weather satellite • Western Hemisphere';
+        });
+    </script>
+</body>
+</html>

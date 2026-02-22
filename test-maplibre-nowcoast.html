@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MapLibre GL Globe + NOAA nowCOAST</title>
+    <script src="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; font-family: -apple-system, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .controls {
+            position: absolute;
+            top: env(safe-area-inset-top, 10px);
+            left: 10px;
+            right: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+            padding-top: 10px;
+            flex-wrap: wrap;
+        }
+        .control-btn {
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .control-btn.active {
+            background: linear-gradient(135deg, #60a5fa, #34d399);
+            color: black;
+            border-color: transparent;
+        }
+        .info-box {
+            position: absolute;
+            bottom: 80px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        .info-box .title { font-weight: 600; margin-bottom: 4px; }
+        .info-box .detail { color: #888; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button class="control-btn active" id="btn-base">Base</button>
+        <button class="control-btn" id="btn-visible">Visible</button>
+        <button class="control-btn" id="btn-ir">Infrared</button>
+        <button class="control-btn" id="btn-wv">Water Vapor</button>
+    </div>
+    <div class="info-box">
+        <div class="title" id="status">Loading globe...</div>
+        <div class="detail" id="detail">MapLibre GL + NOAA nowCOAST WMS</div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const detailEl = document.getElementById('detail');
+
+        // NOAA nowCOAST WMS endpoints for different imagery types
+        // These are Web Mercator projected tiles from NOAA
+        const LAYERS = {
+            visible: {
+                url: 'https://nowcoast.noaa.gov/arcgis/services/nowcoast/sat_meteo_imagery_time/MapServer/WMSServer',
+                layer: '9',  // GOES Visible
+                name: 'GOES Visible',
+                detail: 'Visible light imagery • 0.5km resolution'
+            },
+            ir: {
+                url: 'https://nowcoast.noaa.gov/arcgis/services/nowcoast/sat_meteo_imagery_time/MapServer/WMSServer',
+                layer: '17', // GOES IR
+                name: 'GOES Infrared',
+                detail: 'Longwave infrared • Shows cloud temperatures'
+            },
+            wv: {
+                url: 'https://nowcoast.noaa.gov/arcgis/services/nowcoast/sat_meteo_imagery_time/MapServer/WMSServer',
+                layer: '13', // GOES Water Vapor
+                name: 'GOES Water Vapor',
+                detail: 'Upper atmosphere moisture'
+            }
+        };
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                name: 'Weather Globe',
+                sources: {
+                    'arcgis-satellite': {
+                        type: 'raster',
+                        tiles: [
+                            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                        ],
+                        tileSize: 256,
+                        maxzoom: 18
+                    },
+                    'goes-visible': {
+                        type: 'raster',
+                        tiles: [
+                            'https://nowcoast.noaa.gov/geoserver/satellite/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=goes_visible_imagery&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&STYLES=&BBOX={bbox-epsg-3857}'
+                        ],
+                        tileSize: 256
+                    },
+                    'goes-ir': {
+                        type: 'raster',
+                        tiles: [
+                            'https://nowcoast.noaa.gov/geoserver/satellite/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=goes_longwave_imagery&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&STYLES=&BBOX={bbox-epsg-3857}'
+                        ],
+                        tileSize: 256
+                    },
+                    'goes-wv': {
+                        type: 'raster',
+                        tiles: [
+                            'https://nowcoast.noaa.gov/geoserver/satellite/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=goes_water_vapor_imagery&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&STYLES=&BBOX={bbox-epsg-3857}'
+                        ],
+                        tileSize: 256
+                    }
+                },
+                layers: [
+                    {
+                        id: 'background',
+                        type: 'background',
+                        paint: { 'background-color': '#000' }
+                    },
+                    {
+                        id: 'base-satellite',
+                        type: 'raster',
+                        source: 'arcgis-satellite',
+                        paint: { 'raster-opacity': 1 }
+                    },
+                    {
+                        id: 'goes-visible-layer',
+                        type: 'raster',
+                        source: 'goes-visible',
+                        paint: { 'raster-opacity': 0 }
+                    },
+                    {
+                        id: 'goes-ir-layer',
+                        type: 'raster',
+                        source: 'goes-ir',
+                        paint: { 'raster-opacity': 0 }
+                    },
+                    {
+                        id: 'goes-wv-layer',
+                        type: 'raster',
+                        source: 'goes-wv',
+                        paint: { 'raster-opacity': 0 }
+                    }
+                ],
+                sky: {
+                    'atmosphere-blend': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        0, 1,
+                        5, 1,
+                        7, 0
+                    ]
+                },
+                projection: {
+                    type: 'globe'
+                }
+            },
+            center: [-98, 39],
+            zoom: 3,
+            maxPitch: 85
+        });
+
+        map.on('load', () => {
+            statusEl.textContent = '✅ Globe loaded';
+            detailEl.textContent = 'Pan/zoom to explore • Tap buttons for layers';
+        });
+
+        map.on('error', (e) => {
+            console.error('Map error:', e);
+            statusEl.textContent = '❌ Error loading';
+        });
+
+        // Button handlers
+        function setActiveButton(id) {
+            document.querySelectorAll('.control-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        document.getElementById('btn-base').addEventListener('click', function() {
+            setActiveButton('btn-base');
+            map.setPaintProperty('base-satellite', 'raster-opacity', 1);
+            map.setPaintProperty('goes-visible-layer', 'raster-opacity', 0);
+            map.setPaintProperty('goes-ir-layer', 'raster-opacity', 0);
+            map.setPaintProperty('goes-wv-layer', 'raster-opacity', 0);
+            statusEl.textContent = '🛰️ Base Satellite';
+            detailEl.textContent = 'ArcGIS World Imagery';
+        });
+
+        document.getElementById('btn-visible').addEventListener('click', function() {
+            setActiveButton('btn-visible');
+            map.setPaintProperty('base-satellite', 'raster-opacity', 0.3);
+            map.setPaintProperty('goes-visible-layer', 'raster-opacity', 1);
+            map.setPaintProperty('goes-ir-layer', 'raster-opacity', 0);
+            map.setPaintProperty('goes-wv-layer', 'raster-opacity', 0);
+            statusEl.textContent = '🌤️ GOES Visible';
+            detailEl.textContent = 'Visible light • 0.5km resolution • Updated every 5 min';
+        });
+
+        document.getElementById('btn-ir').addEventListener('click', function() {
+            setActiveButton('btn-ir');
+            map.setPaintProperty('base-satellite', 'raster-opacity', 0.3);
+            map.setPaintProperty('goes-visible-layer', 'raster-opacity', 0);
+            map.setPaintProperty('goes-ir-layer', 'raster-opacity', 1);
+            map.setPaintProperty('goes-wv-layer', 'raster-opacity', 0);
+            statusEl.textContent = '🌡️ GOES Infrared';
+            detailEl.textContent = 'Longwave IR • Shows cloud temperatures';
+        });
+
+        document.getElementById('btn-wv').addEventListener('click', function() {
+            setActiveButton('btn-wv');
+            map.setPaintProperty('base-satellite', 'raster-opacity', 0.3);
+            map.setPaintProperty('goes-visible-layer', 'raster-opacity', 0);
+            map.setPaintProperty('goes-ir-layer', 'raster-opacity', 0);
+            map.setPaintProperty('goes-wv-layer', 'raster-opacity', 1);
+            statusEl.textContent = '💧 GOES Water Vapor';
+            detailEl.textContent = 'Upper atmosphere moisture';
+        });
+
+        // Auto-show visible layer after load
+        setTimeout(() => {
+            document.getElementById('btn-visible').click();
+        }, 2000);
+    </script>
+</body>
+</html>
