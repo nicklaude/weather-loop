@@ -27,7 +27,8 @@ export function MapView() {
   const [showSatellite, setShowSatellite] = useState(true);
   const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
   const [showTrueColor, setShowTrueColor] = useState(false); // EOX Sentinel-2 true color base, off by default
-  const [showTestLayer, setShowTestLayer] = useState(false); // Test layer for experiments
+  const [showTestLayer, setShowTestLayer] = useState(false); // Test layer for experiments (VIIRS)
+  const [showCloudLayer, setShowCloudLayer] = useState(false); // Cloud infrared layer
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -71,15 +72,24 @@ export function MapView() {
             maxzoom: 14,
             attribution: '© EOX Sentinel-2 Cloudless',
           },
-          // NASA GIBS MODIS True Color - daily satellite imagery (test layer)
-          'gibs-modis': {
+          // NASA GIBS VIIRS True Color - daily satellite (NO stitching gaps unlike MODIS!)
+          'gibs-viirs': {
             type: 'raster',
             tiles: [
-              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${new Date(Date.now() - 86400000).toISOString().split('T')[0]}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${new Date(Date.now() - 86400000).toISOString().split('T')[0]}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
             ],
             tileSize: 256,
             maxzoom: 9,
-            attribution: '© NASA GIBS MODIS',
+            attribution: '© NASA GIBS VIIRS',
+          },
+          // NOAA nowCOAST infrared satellite - shows cloud patterns (5 min updates)
+          'nowcoast-ir': {
+            type: 'raster',
+            tiles: [
+              'https://nowcoast.noaa.gov/geoserver/satellite/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=goes_longwave_imagery&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true'
+            ],
+            tileSize: 256,
+            attribution: '© NOAA nowCOAST IR',
           },
         },
         layers: [
@@ -115,11 +125,11 @@ export function MapView() {
               'raster-opacity': 0.7,
             },
           },
-          // Test layer for experiments (NASA GIBS MODIS)
+          // Test layer - VIIRS true color (no stitching gaps!)
           {
             id: 'test-layer',
             type: 'raster',
-            source: 'gibs-modis',
+            source: 'gibs-viirs',
             minzoom: 0,
             maxzoom: 9,
             layout: {
@@ -127,6 +137,20 @@ export function MapView() {
             },
             paint: {
               'raster-opacity': 0.85,
+            },
+          },
+          // Cloud layer - infrared imagery (thermal, shows clouds)
+          {
+            id: 'cloud-layer',
+            type: 'raster',
+            source: 'nowcoast-ir',
+            minzoom: 0,
+            maxzoom: 10,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.7,
             },
           },
         ],
@@ -276,7 +300,7 @@ export function MapView() {
     }
   }, [showTrueColor]);
 
-  // Toggle test layer visibility (NASA GIBS MODIS)
+  // Toggle test layer visibility (NASA GIBS VIIRS - no stitching!)
   const toggleTestLayer = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -291,6 +315,22 @@ export function MapView() {
       console.error('Failed to toggle test layer:', err);
     }
   }, [showTestLayer]);
+
+  // Toggle cloud layer visibility (NOAA infrared)
+  const toggleCloudLayer = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showCloudLayer;
+    setShowCloudLayer(newVisibility);
+    try {
+      if (map.getLayer('cloud-layer')) {
+        map.setLayoutProperty('cloud-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle cloud layer:', err);
+    }
+  }, [showCloudLayer]);
 
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
@@ -341,9 +381,17 @@ export function MapView() {
         </button>
 
         <button
+          className={`layer-icon-btn ${showCloudLayer ? 'active' : ''}`}
+          onClick={toggleCloudLayer}
+          title="Cloud Infrared (NOAA)"
+        >
+          ☁️
+        </button>
+
+        <button
           className={`layer-icon-btn test-btn ${showTestLayer ? 'active' : ''}`}
           onClick={toggleTestLayer}
-          title="Test Layer (NASA GIBS MODIS)"
+          title="Test Layer (NASA GIBS VIIRS)"
         >
           🧪
         </button>
