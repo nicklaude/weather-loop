@@ -233,7 +233,7 @@ export function MapView() {
           type: 'raster',
           source: 'radar',
           minzoom: 0,
-          maxzoom: 12,
+          maxzoom: 7, // RainViewer only provides tiles up to zoom 7
           paint: {
             'raster-opacity': 0.75,
           },
@@ -250,7 +250,7 @@ export function MapView() {
 
     const interval = setInterval(() => {
       setCurrentFrameIndex(prev => (prev + 1) % radarFrames.length);
-    }, 400);
+    }, 600); // Slower animation to reduce tile requests
 
     return () => clearInterval(interval);
   }, [isPlaying, radarFrames.length]);
