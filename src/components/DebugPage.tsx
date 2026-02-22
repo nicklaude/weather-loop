@@ -101,9 +101,17 @@ const DATA_SOURCES: Omit<SourceTest, 'status'>[] = [
     type: 'json',
   },
 
-  // === ALTERNATIVES (NOT TESTED - OPTIONAL) ===
-  // OpenWeatherMap requires API key signup - skipping automatic test
-  // To add: get key from https://openweathermap.org/api and add to URL
+  // === OPENWEATHERMAP (WITH API KEY) ===
+  {
+    name: 'OpenWeatherMap Clouds',
+    url: 'https://tile.openweathermap.org/map/clouds_new/5/9/12.png?appid=93dbf4ba0dab0ecc9247cdf226f39c5b',
+    type: 'image',
+  },
+  {
+    name: 'OpenWeatherMap Precipitation',
+    url: 'https://tile.openweathermap.org/map/precipitation_new/5/9/12.png?appid=93dbf4ba0dab0ecc9247cdf226f39c5b',
+    type: 'image',
+  },
 ];
 
 async function testSource(source: Omit<SourceTest, 'status'>): Promise<SourceTest> {
