@@ -50,11 +50,13 @@ export function useWeatherLoop(
   const animationRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
 
-  // Load frames for the current sector
+  // Load frames for the current sector - progressively shows frames as they load
   const loadFrames = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     setLoadingProgress(0);
+    setFrames([]); // Clear existing frames
+    setCurrentFrame(0);
 
     try {
       // Clear old cache entries
@@ -71,7 +73,7 @@ export function useWeatherLoop(
         throw new Error('No images available');
       }
 
-      // Load each image into cache
+      // Load each image into cache - progressively update frames as they load
       const loadedFrames: string[] = [];
 
       for (let i = 0; i < imageUrls.length; i++) {
@@ -79,6 +81,8 @@ export function useWeatherLoop(
         try {
           const objectUrl = await fetchAndCacheImage(url, sector);
           loadedFrames.push(objectUrl);
+          // Update frames progressively so user sees content while loading
+          setFrames([...loadedFrames]);
           setLoadingProgress(((i + 1) / imageUrls.length) * 100);
         } catch (err) {
           console.warn(`Failed to load frame ${i + 1}:`, err);
@@ -88,9 +92,6 @@ export function useWeatherLoop(
       if (loadedFrames.length === 0) {
         throw new Error('No frames could be loaded');
       }
-
-      setFrames(loadedFrames);
-      setCurrentFrame(0);
 
       // Update cache stats
       const stats = await getCacheStats();

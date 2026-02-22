@@ -97,32 +97,39 @@ export function WeatherLoop() {
         </select>
       </div>
 
-      {/* Main Image Display */}
+      {/* Main Image Display - shows frames progressively while loading */}
       <div
         className="image-container"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {isLoading ? (
-          <div className="loading">
-            <div className="loading-spinner" />
-            <div className="progress-text">{Math.round(loadingProgress)}%</div>
-          </div>
-        ) : error ? (
+        {error ? (
           <div className="error">
             <p>{error}</p>
             <button onClick={controls.refresh} className="retry-btn">
-              <RefreshCw size={16} />
+              <RefreshCw size={20} />
               Retry
             </button>
           </div>
         ) : frames.length > 0 ? (
-          <img
-            src={frames[currentFrame]}
-            alt={`Satellite frame ${currentFrame + 1}/${frames.length}`}
-            className="satellite-image"
-            draggable={false}
-          />
+          <>
+            <img
+              src={frames[Math.min(currentFrame, frames.length - 1)]}
+              alt={`Satellite frame ${currentFrame + 1}/${frames.length}`}
+              className="satellite-image"
+              draggable={false}
+            />
+            {isLoading && (
+              <div className="loading-overlay">
+                <div className="progress-text">{Math.round(loadingProgress)}%</div>
+              </div>
+            )}
+          </>
+        ) : isLoading ? (
+          <div className="loading">
+            <div className="loading-spinner" />
+            <div className="progress-text">{Math.round(loadingProgress)}%</div>
+          </div>
         ) : (
           <div className="no-frames">No frames available</div>
         )}
@@ -132,29 +139,29 @@ export function WeatherLoop() {
       <div className="playback-controls">
         <button
           onClick={controls.prevFrame}
-          disabled={isLoading || frames.length === 0}
+          disabled={frames.length === 0}
           className="control-btn"
           aria-label="Previous frame"
         >
-          <SkipBack size={24} />
+          <SkipBack size={28} />
         </button>
 
         <button
           onClick={controls.toggle}
-          disabled={isLoading || frames.length === 0}
+          disabled={frames.length === 0}
           className="control-btn play-btn"
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
-          {isPlaying ? <Pause size={28} /> : <Play size={28} />}
+          {isPlaying ? <Pause size={32} /> : <Play size={32} />}
         </button>
 
         <button
           onClick={controls.nextFrame}
-          disabled={isLoading || frames.length === 0}
+          disabled={frames.length === 0}
           className="control-btn"
           aria-label="Next frame"
         >
-          <SkipForward size={24} />
+          <SkipForward size={28} />
         </button>
 
         <button
@@ -163,7 +170,7 @@ export function WeatherLoop() {
           className="control-btn"
           aria-label="Refresh"
         >
-          <RefreshCw size={24} className={isLoading ? 'spinning' : ''} />
+          <RefreshCw size={28} className={isLoading ? 'spinning' : ''} />
         </button>
       </div>
 
