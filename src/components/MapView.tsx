@@ -26,7 +26,8 @@ export function MapView() {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [showSatellite, setShowSatellite] = useState(true);
   const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
-  const [showTrueColor, setShowTrueColor] = useState(false); // EOX Sentinel-2 true color, off by default
+  const [showTrueColor, setShowTrueColor] = useState(false); // EOX Sentinel-2 true color base, off by default
+  const [showTestLayer, setShowTestLayer] = useState(false); // Test layer for experiments
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -70,6 +71,16 @@ export function MapView() {
             maxzoom: 14,
             attribution: '© EOX Sentinel-2 Cloudless',
           },
+          // NASA GIBS MODIS True Color - daily satellite imagery (test layer)
+          'gibs-modis': {
+            type: 'raster',
+            tiles: [
+              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${new Date(Date.now() - 86400000).toISOString().split('T')[0]}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+            ],
+            tileSize: 256,
+            maxzoom: 9,
+            attribution: '© NASA GIBS MODIS',
+          },
         },
         layers: [
           {
@@ -79,16 +90,7 @@ export function MapView() {
             minzoom: 0,
             maxzoom: 18,
           },
-          {
-            id: 'satellite-layer',
-            type: 'raster',
-            source: 'goes-satellite',
-            minzoom: 0,
-            maxzoom: 10,
-            paint: {
-              'raster-opacity': 0.7,
-            },
-          },
+          // EOX true color base layer (below satellite)
           {
             id: 'eox-truecolor-layer',
             type: 'raster',
@@ -100,6 +102,31 @@ export function MapView() {
             },
             paint: {
               'raster-opacity': 0.9,
+            },
+          },
+          // GOES satellite (grayscale, on top of EOX)
+          {
+            id: 'satellite-layer',
+            type: 'raster',
+            source: 'goes-satellite',
+            minzoom: 0,
+            maxzoom: 10,
+            paint: {
+              'raster-opacity': 0.7,
+            },
+          },
+          // Test layer for experiments (NASA GIBS MODIS)
+          {
+            id: 'test-layer',
+            type: 'raster',
+            source: 'gibs-modis',
+            minzoom: 0,
+            maxzoom: 9,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.85,
             },
           },
         ],
@@ -249,6 +276,22 @@ export function MapView() {
     }
   }, [showTrueColor]);
 
+  // Toggle test layer visibility (NASA GIBS MODIS)
+  const toggleTestLayer = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showTestLayer;
+    setShowTestLayer(newVisibility);
+    try {
+      if (map.getLayer('test-layer')) {
+        map.setLayoutProperty('test-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle test layer:', err);
+    }
+  }, [showTestLayer]);
+
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
     if (radarFrames.length === 0) return '';
@@ -290,11 +333,19 @@ export function MapView() {
         </button>
 
         <button
-          className={`layer-icon-btn test-btn ${showTrueColor ? 'active' : ''}`}
+          className={`layer-icon-btn ${showTrueColor ? 'active' : ''}`}
           onClick={toggleTrueColor}
-          title="True Color (EOX Sentinel-2)"
+          title="True Color Base (EOX Sentinel-2)"
         >
           🌍
+        </button>
+
+        <button
+          className={`layer-icon-btn test-btn ${showTestLayer ? 'active' : ''}`}
+          onClick={toggleTestLayer}
+          title="Test Layer (NASA GIBS MODIS)"
+        >
+          🧪
         </button>
       </div>
 
