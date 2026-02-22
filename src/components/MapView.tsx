@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Play, Pause, RefreshCw } from 'lucide-react';
+import { Play, Pause, RefreshCw, Cloud, CloudRain, Eye, EyeOff } from 'lucide-react';
 import './MapView.css';
 
 // RainViewer API for pre-tiled radar
@@ -39,13 +39,13 @@ export function MapView() {
         name: 'Weather Loop',
         projection: { type: 'globe' },
         sources: {
-          // Dark base map tiles
+          // Dark base map with labels
           'carto-dark': {
             type: 'raster',
             tiles: [
-              'https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
-              'https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
-              'https://c.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
+              'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+              'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+              'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
             ],
             tileSize: 256,
             attribution: '© CARTO',
@@ -81,7 +81,7 @@ export function MapView() {
         ],
       },
       center: [-71.0589, 42.3601], // Boston
-      zoom: 6,
+      zoom: 5,
     });
 
     // Add navigation controls
@@ -132,6 +132,7 @@ export function MapView() {
     const currentFrame = radarFrames[currentFrameIndex];
     if (!currentFrame) return;
 
+    // Color scheme 2 = original, smooth=1, snow=1
     const radarUrl = `https://tilecache.rainviewer.com${currentFrame.path}/256/{z}/{x}/{y}/2/1_1.png`;
 
     if (map.getSource('radar')) {
@@ -152,7 +153,7 @@ export function MapView() {
         minzoom: 0,
         maxzoom: 12,
         paint: {
-          'raster-opacity': 0.8,
+          'raster-opacity': 0.75,
         },
       });
     }
@@ -202,40 +203,58 @@ export function MapView() {
     });
   };
 
+  // Check if current frame is a forecast (nowcast)
+  const isForecast = () => {
+    if (radarFrames.length === 0) return false;
+    const pastFrames = radarFrames.filter(f => f.time <= Date.now() / 1000);
+    return currentFrameIndex >= pastFrames.length;
+  };
+
   return (
     <div className="map-view">
-      {/* Controls */}
-      <div className="map-controls">
+      {/* Layer Controls */}
+      <div className="layer-controls">
         <button
-          className={`map-btn ${showSatellite ? 'active' : ''}`}
+          className={`layer-btn ${showSatellite ? 'active' : ''}`}
           onClick={toggleSatellite}
           title="Toggle Satellite"
         >
-          🛰️ Satellite
+          {showSatellite ? <Eye size={16} /> : <EyeOff size={16} />}
+          <Cloud size={16} />
+          <span>Satellite</span>
         </button>
 
         <button
-          className={`map-btn ${showRadar ? 'active' : ''}`}
+          className={`layer-btn ${showRadar ? 'active' : ''}`}
           onClick={toggleRadar}
           title="Toggle Radar"
         >
-          🌧️ Radar
+          {showRadar ? <Eye size={16} /> : <EyeOff size={16} />}
+          <CloudRain size={16} />
+          <span>Radar</span>
         </button>
-
-        <div className="map-divider" />
-
-        <button
-          className="map-btn"
-          onClick={() => setIsPlaying(p => !p)}
-          disabled={radarFrames.length === 0}
-        >
-          {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-        </button>
-
-        <span className="map-time">
-          {getCurrentTimestamp() || '...'}
-        </span>
       </div>
+
+      {/* Radar Legend */}
+      {showRadar && (
+        <div className="radar-legend">
+          <div className="legend-title">Reflectivity (dBZ)</div>
+          <div className="legend-bar">
+            <div className="legend-gradient" />
+            <div className="legend-labels">
+              <span>5</span>
+              <span>20</span>
+              <span>35</span>
+              <span>50</span>
+              <span>65+</span>
+            </div>
+          </div>
+          <div className="legend-desc">
+            <span>Light</span>
+            <span>Heavy</span>
+          </div>
+        </div>
+      )}
 
       {/* Map container */}
       <div ref={containerRef} className="map-container">
@@ -252,25 +271,40 @@ export function MapView() {
         )}
       </div>
 
-      {/* Scrubber */}
-      {radarFrames.length > 0 && (
-        <div className="map-scrubber">
+      {/* Playback Controls */}
+      <div className="playback-bar">
+        <button
+          className="play-btn"
+          onClick={() => setIsPlaying(p => !p)}
+          disabled={radarFrames.length === 0}
+        >
+          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+        </button>
+
+        <div className="time-display">
+          <span className="time-value">{getCurrentTimestamp() || '--:--'}</span>
+          {isForecast() && <span className="forecast-badge">Forecast</span>}
+        </div>
+
+        {radarFrames.length > 0 && (
           <input
             type="range"
+            className="time-slider"
             min={0}
             max={radarFrames.length - 1}
             value={currentFrameIndex}
             onChange={(e) => setCurrentFrameIndex(Number(e.target.value))}
           />
-          <span className="map-frame-info">
-            {currentFrameIndex + 1} / {radarFrames.length}
-          </span>
-        </div>
-      )}
+        )}
+
+        <span className="frame-count">
+          {radarFrames.length > 0 ? `${currentFrameIndex + 1}/${radarFrames.length}` : '...'}
+        </span>
+      </div>
 
       {/* Footer */}
       <div className="map-footer">
-        <span>Satellite: NOAA GOES • Radar: RainViewer</span>
+        <span>NOAA GOES Satellite • NEXRAD Radar</span>
       </div>
     </div>
   );
