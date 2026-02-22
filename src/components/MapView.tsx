@@ -25,7 +25,8 @@ export function MapView() {
   const [radarFrames, setRadarFrames] = useState<RainViewerFrame[]>([]);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [showSatellite, setShowSatellite] = useState(true);
-  const [showRadar, setShowRadar] = useState(true);
+  const [showRadar, setShowRadar] = useState(false); // Default off
+  const [showGeocolor, setShowGeocolor] = useState(false); // Test layer, off by default
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -59,6 +60,15 @@ export function MapView() {
             tileSize: 256,
             attribution: '© NOAA nowCOAST',
           },
+          // Iowa Environmental Mesonet GOES visible - TEST (no referer issues)
+          'iem-geocolor': {
+            type: 'raster',
+            tiles: [
+              'https://mesonet.agron.iastate.edu/cgi-bin/wms/goes_east.cgi?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=conus_ch02&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true'
+            ],
+            tileSize: 256,
+            attribution: '© Iowa State University',
+          },
         },
         layers: [
           {
@@ -76,6 +86,19 @@ export function MapView() {
             maxzoom: 10,
             paint: {
               'raster-opacity': 0.7,
+            },
+          },
+          {
+            id: 'geocolor-layer',
+            type: 'raster',
+            source: 'iem-geocolor',
+            minzoom: 0,
+            maxzoom: 10,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.8,
             },
           },
         ],
@@ -209,6 +232,22 @@ export function MapView() {
     }
   }, [showRadar]);
 
+  // Toggle GEOCOLOR test layer visibility
+  const toggleGeocolor = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showGeocolor;
+    setShowGeocolor(newVisibility);
+    try {
+      if (map.getLayer('geocolor-layer')) {
+        map.setLayoutProperty('geocolor-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle geocolor:', err);
+    }
+  }, [showGeocolor]);
+
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
     if (radarFrames.length === 0) return '';
@@ -231,26 +270,30 @@ export function MapView() {
 
   return (
     <div className="map-view">
-      {/* Layer Controls - Text-based for mobile compatibility */}
+      {/* Layer Controls - Icon buttons */}
       <div className="layer-controls">
         <button
-          className={`layer-btn ${showSatellite ? 'active' : ''}`}
+          className={`layer-icon-btn ${showSatellite ? 'active' : ''}`}
           onClick={toggleSatellite}
-          title="Toggle Satellite"
+          title="Satellite (nowCOAST visible)"
         >
-          <span className="layer-icon">🛰️</span>
-          <span className="layer-label">Satellite</span>
-          <span className="layer-status">{showSatellite ? 'ON' : 'OFF'}</span>
+          🛰️
         </button>
 
         <button
-          className={`layer-btn ${showRadar ? 'active' : ''}`}
+          className={`layer-icon-btn ${showRadar ? 'active' : ''}`}
           onClick={toggleRadar}
-          title="Toggle Radar"
+          title="Radar (NEXRAD)"
         >
-          <span className="layer-icon">🌧️</span>
-          <span className="layer-label">Radar</span>
-          <span className="layer-status">{showRadar ? 'ON' : 'OFF'}</span>
+          🌧️
+        </button>
+
+        <button
+          className={`layer-icon-btn test-btn ${showGeocolor ? 'active' : ''}`}
+          onClick={toggleGeocolor}
+          title="TEST: IEM GEOCOLOR"
+        >
+          🧪
         </button>
       </div>
 
