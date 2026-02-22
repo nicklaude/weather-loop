@@ -24,7 +24,7 @@ export function MapView() {
   const [isLoading, setIsLoading] = useState(true);
   const [radarFrames, setRadarFrames] = useState<RainViewerFrame[]>([]);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
-  const [showSatellite, setShowSatellite] = useState(true);
+  const [showSatellite, setShowSatellite] = useState(false); // Grayscale satellite OFF by default
   const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
   const [showTrueColor, setShowTrueColor] = useState(true); // EOX Sentinel-2 true color base, ON by default
   const [showTestLayer, setShowTestLayer] = useState(false); // Test layer for experiments (VIIRS)
@@ -119,6 +119,9 @@ export function MapView() {
             source: 'goes-satellite',
             minzoom: 0,
             maxzoom: 10,
+            layout: {
+              visibility: 'none', // Off by default
+            },
             paint: {
               'raster-opacity': 0.7,
             },
