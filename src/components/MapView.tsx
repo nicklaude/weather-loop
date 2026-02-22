@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Play, Pause, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import './MapView.css';
 
 // RainViewer API for pre-tiled radar
@@ -25,7 +25,7 @@ export function MapView() {
   const [radarFrames, setRadarFrames] = useState<RainViewerFrame[]>([]);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [showSatellite, setShowSatellite] = useState(true);
-  const [showRadar, setShowRadar] = useState(false); // Default off
+  const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
   const [showGeocolor, setShowGeocolor] = useState(false); // Test layer, off by default
   const [error, setError] = useState<string | null>(null);
 
@@ -336,11 +336,12 @@ export function MapView() {
       {/* Playback Controls */}
       <div className="playback-bar">
         <button
-          className="play-btn"
+          className={`play-btn ${isPlaying ? 'playing' : ''}`}
           onClick={() => setIsPlaying(p => !p)}
           disabled={radarFrames.length === 0}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
         >
-          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+          {isPlaying ? '⏸' : '▶️'}
         </button>
 
         <div className="time-display">
