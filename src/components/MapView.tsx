@@ -17,12 +17,34 @@ interface RainViewerData {
   };
 }
 
+// SSEC RealEarth GOES timestamp format: "20260222.214117" -> unix timestamp
+function parseGoesTimestamp(ts: string): number {
+  // Format: YYYYMMDD.hhmmss
+  const year = parseInt(ts.slice(0, 4));
+  const month = parseInt(ts.slice(4, 6)) - 1;
+  const day = parseInt(ts.slice(6, 8));
+  const hour = parseInt(ts.slice(9, 11));
+  const min = parseInt(ts.slice(11, 13));
+  const sec = parseInt(ts.slice(13, 15));
+  return new Date(Date.UTC(year, month, day, hour, min, sec)).getTime() / 1000;
+}
+
+// Convert unix timestamp to GOES tile URL date/time format
+function formatGoesTimestamp(ts: string): { date: string; time: string } {
+  // ts format: "20260222.214117"
+  return {
+    date: ts.slice(0, 8), // "20260222"
+    time: ts.slice(9),     // "214117"
+  };
+}
+
 export function MapView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [radarFrames, setRadarFrames] = useState<RainViewerFrame[]>([]);
+  const [goesTimestamps, setGoesTimestamps] = useState<string[]>([]); // GOES GeoColor timestamps
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [showSatellite, setShowSatellite] = useState(false); // Grayscale satellite OFF by default
   const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
@@ -106,10 +128,11 @@ export function MapView() {
             attribution: '© Iowa Environmental Mesonet',
           },
           // GOES GeoColor - true color satellite from SSEC RealEarth (5 min updates)
+          // Tiles are added dynamically with time parameter
           'goes-geocolor': {
             type: 'raster',
             tiles: [
-              'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-GEOCOLOR/{z}/{x}/{y}.png'
+              'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-geo-color/{z}/{x}/{y}.png'
             ],
             tileSize: 256,
             maxzoom: 7,
@@ -303,6 +326,27 @@ export function MapView() {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch GOES GeoColor timestamps from SSEC RealEarth
+  useEffect(() => {
+    const fetchGoesTimestamps = async () => {
+      try {
+        const response = await fetch('https://realearth.ssec.wisc.edu/api/times?products=G19-ABI-CONUS-geo-color');
+        if (!response.ok) throw new Error('Failed to fetch GOES timestamps');
+        const data = await response.json();
+        const timestamps = data['G19-ABI-CONUS-geo-color'] || [];
+        setGoesTimestamps(timestamps);
+        console.log(`Loaded ${timestamps.length} GOES timestamps`);
+      } catch (err) {
+        console.error('Failed to fetch GOES timestamps:', err);
+      }
+    };
+
+    fetchGoesTimestamps();
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchGoesTimestamps, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Add/update radar layer when frames change
   useEffect(() => {
     const map = mapRef.current;
@@ -341,6 +385,44 @@ export function MapView() {
       console.error('Failed to update radar layer:', err);
     }
   }, [radarFrames, currentFrameIndex]);
+
+  // Update GOES GeoColor tiles when slider moves (snap to nearest available timestamp)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || radarFrames.length === 0 || goesTimestamps.length === 0) return;
+
+    const currentFrame = radarFrames[currentFrameIndex];
+    if (!currentFrame) return;
+
+    // Find the nearest GOES timestamp to the current radar time
+    const targetTime = currentFrame.time;
+    let nearestIdx = 0;
+    let nearestDiff = Infinity;
+
+    for (let i = 0; i < goesTimestamps.length; i++) {
+      const goesTime = parseGoesTimestamp(goesTimestamps[i]);
+      const diff = Math.abs(goesTime - targetTime);
+      if (diff < nearestDiff) {
+        nearestDiff = diff;
+        nearestIdx = i;
+      }
+    }
+
+    const nearestTimestamp = goesTimestamps[nearestIdx];
+    const { date, time } = formatGoesTimestamp(nearestTimestamp);
+
+    // Build the time-specific tile URL
+    // Format: /tiles/PRODUCT/YYYYMMDD/hhmmss/z/x/y.png
+    const goesUrl = `https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-geo-color/${date}/${time}/{z}/{x}/{y}.png`;
+
+    try {
+      if (map.getSource('goes-geocolor')) {
+        (map.getSource('goes-geocolor') as maplibregl.RasterTileSource).setTiles([goesUrl]);
+      }
+    } catch (err) {
+      console.error('Failed to update GOES GeoColor tiles:', err);
+    }
+  }, [radarFrames, currentFrameIndex, goesTimestamps]);
 
   // Animation loop
   useEffect(() => {
