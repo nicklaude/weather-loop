@@ -101,7 +101,57 @@ Key concerns:
 
 ---
 
+## 2026-02-22: GOES Overlay Alignment Issue
+
+### Problem
+GOES Full Disk image overlay doesn't align perfectly with globe projection. In top-left corner, image edge doesn't line up with expected geographic bounds.
+
+### Root Cause (researching)
+GOES satellites use **geostationary projection**, NOT a simple lat/lon grid. The Full Disk image is:
+- Circular (disk-shaped), not rectangular
+- Centered at satellite position (GOES-19 at -75.2° W)
+- Coverage is approximately 83° local zenith angle
+- Edge pixels map to Earth's limb at tangent angle
+
+Simply using rectangular bounds like `[-165, -81]` to `[15, 81]` won't work because:
+1. GOES projection is non-linear (perspective from space)
+2. Corners of the rectangular image are actually "space" (black), not Earth
+3. Need proper geodetic transformation
+
+### Options to Fix
+
+1. **Use NOAA's pre-tiled WMS service** (nowcoast.ncep.noaa.gov)
+   - Already reprojected to Web Mercator
+   - Standard WMS interface
+   - Downside: Bounding box format, not XYZ tiles
+
+2. **Use GOES imagery from ArcGIS/ESRI**
+   - Already tiled for web maps
+   - Look for "Living Atlas" weather layers
+
+3. **Pre-process GOES images server-side**
+   - Use GDAL to reproject geostationary -> Web Mercator
+   - Create XYZ tile pyramid
+   - Host on S3/GCS
+
+4. **Use MapLibre's rasterized image source with proper corners**
+   - MapLibre ImageSource supports arbitrary quadrilateral coordinates
+   - Need to calculate exact corner coordinates in lon/lat from GOES projection parameters
+
+### Key References
+- GOES-East position: **-75.2° W** longitude
+- Full Disk: 83° local zenith angle coverage
+- Projection params: Semi-major axis 6,378,137m, satellite height 35,786,023m
+
+### Next Steps
+- Try NOAA nowcoast WMS to see if it works with MapLibre
+- Research GOES ArcGIS layer availability
+- Test with corrected corner coordinates
+
+---
+
 ## Screenshots
 
 - `/tmp/maplibre-globe-test.png` - Initial globe load (works on iOS)
 - `/tmp/maplibre-globe-panned.png` - After pan gesture (smooth)
+- `/tmp/maplibre-goes-overlay.png` - GOES overlay prototype (alignment issue visible in top-left)
