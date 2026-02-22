@@ -26,7 +26,7 @@ export function MapView() {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [showSatellite, setShowSatellite] = useState(true);
   const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
-  const [showGeocolor, setShowGeocolor] = useState(false); // Test layer, off by default
+  const [showGibs, setShowGibs] = useState(false); // NASA GIBS GOES-East GeoColor, off by default
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -60,14 +60,18 @@ export function MapView() {
             tileSize: 256,
             attribution: '© NOAA nowCOAST',
           },
-          // Iowa Environmental Mesonet GOES visible - TEST (no referer issues)
-          'iem-geocolor': {
+          // NASA GIBS GOES-East GeoColor - TRUE COLOR satellite (10-min updates)
+          'nasa-gibs-geocolor': {
             type: 'raster',
             tiles: [
-              'https://mesonet.agron.iastate.edu/cgi-bin/wms/goes_east.cgi?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=conus_ch02&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true'
+              // Use today's date for GOES imagery (updates every 10 min)
+              `https://gibs-a.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${new Date().toISOString().split('T')[0]}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.jpg`,
+              `https://gibs-b.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${new Date().toISOString().split('T')[0]}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.jpg`,
+              `https://gibs-c.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${new Date().toISOString().split('T')[0]}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.jpg`,
             ],
             tileSize: 256,
-            attribution: '© Iowa State University',
+            maxzoom: 6,
+            attribution: '© NASA GIBS',
           },
         },
         layers: [
@@ -89,16 +93,16 @@ export function MapView() {
             },
           },
           {
-            id: 'geocolor-layer',
+            id: 'gibs-geocolor-layer',
             type: 'raster',
-            source: 'iem-geocolor',
+            source: 'nasa-gibs-geocolor',
             minzoom: 0,
-            maxzoom: 10,
+            maxzoom: 6,
             layout: {
               visibility: 'none', // Off by default
             },
             paint: {
-              'raster-opacity': 0.8,
+              'raster-opacity': 0.9,
             },
           },
         ],
@@ -232,21 +236,21 @@ export function MapView() {
     }
   }, [showRadar]);
 
-  // Toggle GEOCOLOR test layer visibility
-  const toggleGeocolor = useCallback(() => {
+  // Toggle NASA GIBS GeoColor layer visibility
+  const toggleGibs = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const newVisibility = !showGeocolor;
-    setShowGeocolor(newVisibility);
+    const newVisibility = !showGibs;
+    setShowGibs(newVisibility);
     try {
-      if (map.getLayer('geocolor-layer')) {
-        map.setLayoutProperty('geocolor-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      if (map.getLayer('gibs-geocolor-layer')) {
+        map.setLayoutProperty('gibs-geocolor-layer', 'visibility', newVisibility ? 'visible' : 'none');
       }
     } catch (err) {
-      console.error('Failed to toggle geocolor:', err);
+      console.error('Failed to toggle GIBS:', err);
     }
-  }, [showGeocolor]);
+  }, [showGibs]);
 
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
@@ -289,11 +293,11 @@ export function MapView() {
         </button>
 
         <button
-          className={`layer-icon-btn test-btn ${showGeocolor ? 'active' : ''}`}
-          onClick={toggleGeocolor}
-          title="TEST: IEM GEOCOLOR"
+          className={`layer-icon-btn test-btn ${showGibs ? 'active' : ''}`}
+          onClick={toggleGibs}
+          title="NASA GIBS GeoColor (True Color)"
         >
-          🧪
+          🌍
         </button>
       </div>
 
