@@ -73,7 +73,8 @@
 /* Radar Legend - Bottom Left */
 .radar-legend {
   position: absolute;
-  bottom: 100px;
+  /* Account for playback bar + Safari bottom bar on mobile */
+  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
   left: 12px;
   background: rgba(0, 0, 0, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -309,7 +310,8 @@
   }
 
   .radar-legend {
-    bottom: 90px;
+    /* Mobile Safari bottom bar is ~44-50px, playback bar is ~60px, need extra padding */
+    bottom: calc(120px + env(safe-area-inset-bottom, 0px));
     left: 8px;
     padding: 8px 10px;
   }

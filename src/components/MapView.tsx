@@ -42,6 +42,7 @@ export function MapView() {
   const [showGoesGeocolor, setShowGoesGeocolor] = useState(false); // GOES GeoColor true color
   const [showMrms, setShowMrms] = useState(false); // MRMS high-res composite radar
   const [showIrEnhanced, setShowIrEnhanced] = useState(false); // Enhanced IR satellite
+  const [showIemAnimated, setShowIemAnimated] = useState(false); // IEM Animated NEXRAD composite
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -143,6 +144,16 @@ export function MapView() {
             tileSize: 256,
             maxzoom: 6,
             attribution: '© NASA GIBS GOES-East IR',
+          },
+          // IEM Animated NEXRAD - composite radar with 50 min history, updates every 5 min
+          // Good alternative to RainViewer to reduce rate limiting
+          'iem-animated': {
+            type: 'raster',
+            tiles: [
+              'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© Iowa Environmental Mesonet',
           },
         },
         layers: [
@@ -260,6 +271,20 @@ export function MapView() {
             },
             paint: {
               'raster-opacity': 0.8,
+            },
+          },
+          // IEM Animated NEXRAD layer - alternative to RainViewer
+          {
+            id: 'iem-animated-layer',
+            type: 'raster',
+            source: 'iem-animated',
+            minzoom: 0,
+            maxzoom: 10,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.75,
             },
           },
         ],
@@ -563,6 +588,22 @@ export function MapView() {
     }
   }, [showIrEnhanced]);
 
+  // Toggle IEM Animated NEXRAD visibility
+  const toggleIemAnimated = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showIemAnimated;
+    setShowIemAnimated(newVisibility);
+    try {
+      if (map.getLayer('iem-animated-layer')) {
+        map.setLayoutProperty('iem-animated-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle IEM Animated:', err);
+    }
+  }, [showIemAnimated]);
+
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
     if (radarFrames.length === 0) return '';
@@ -658,6 +699,14 @@ export function MapView() {
           title="Enhanced IR Satellite"
         >
           🌊
+        </button>
+
+        <button
+          className={`layer-icon-btn ${showIemAnimated ? 'active' : ''}`}
+          onClick={toggleIemAnimated}
+          title="IEM Animated NEXRAD (alternative radar)"
+        >
+          💧
         </button>
       </div>
 

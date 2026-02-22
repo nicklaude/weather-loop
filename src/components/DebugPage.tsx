@@ -61,6 +61,11 @@ const DATA_SOURCES: Omit<SourceTest, 'status'>[] = [
     url: 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-n1p-900913/5/9/12.png',
     type: 'image',
   },
+  {
+    name: 'IEM Animated NEXRAD (💧)',
+    url: 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/5/9/12.png',
+    type: 'image',
+  },
 
   // === SSEC REALEARTH (REFERER ISSUES) ===
   {
