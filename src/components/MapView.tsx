@@ -29,6 +29,10 @@ export function MapView() {
   const [showTrueColor, setShowTrueColor] = useState(true); // EOX Sentinel-2 true color base, ON by default
   const [showTestLayer, setShowTestLayer] = useState(false); // Test layer for experiments (VIIRS)
   const [showCloudLayer, setShowCloudLayer] = useState(false); // Cloud infrared layer
+  const [showKbox, setShowKbox] = useState(false); // KBOX Boston radar
+  const [showGoesGeocolor, setShowGoesGeocolor] = useState(false); // GOES GeoColor true color
+  const [showMrms, setShowMrms] = useState(false); // MRMS high-res composite radar
+  const [showIrEnhanced, setShowIrEnhanced] = useState(false); // Enhanced IR satellite
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -92,6 +96,44 @@ export function MapView() {
             tileSize: 256,
             attribution: '© NOAA nowCOAST IR',
           },
+          // KBOX - Boston's local NEXRAD radar via Iowa Environmental Mesonet
+          'kbox-radar': {
+            type: 'raster',
+            tiles: [
+              'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-0/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© Iowa Environmental Mesonet',
+          },
+          // GOES GeoColor - true color satellite from SSEC RealEarth (5 min updates)
+          'goes-geocolor': {
+            type: 'raster',
+            tiles: [
+              'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-GEOCOLOR/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            maxzoom: 7,
+            attribution: '© SSEC RealEarth',
+          },
+          // MRMS - Multi-Radar Multi-Sensor composite (143 radars, 1km resolution)
+          'mrms-radar': {
+            type: 'raster',
+            tiles: [
+              'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-n1p-900913/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© IEM MRMS',
+          },
+          // Enhanced IR - better cloud visualization
+          'ir-enhanced': {
+            type: 'raster',
+            tiles: [
+              'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-band13/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            maxzoom: 7,
+            attribution: '© SSEC RealEarth IR',
+          },
         },
         layers: [
           {
@@ -152,6 +194,62 @@ export function MapView() {
             },
             paint: {
               'raster-opacity': 0.7,
+            },
+          },
+          // KBOX Boston radar layer
+          {
+            id: 'kbox-layer',
+            type: 'raster',
+            source: 'kbox-radar',
+            minzoom: 0,
+            maxzoom: 10,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.8,
+            },
+          },
+          // GOES GeoColor true color layer
+          {
+            id: 'geocolor-layer',
+            type: 'raster',
+            source: 'goes-geocolor',
+            minzoom: 0,
+            maxzoom: 7,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.9,
+            },
+          },
+          // MRMS high-res composite radar layer
+          {
+            id: 'mrms-layer',
+            type: 'raster',
+            source: 'mrms-radar',
+            minzoom: 0,
+            maxzoom: 10,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.75,
+            },
+          },
+          // Enhanced IR satellite layer
+          {
+            id: 'ir-enhanced-layer',
+            type: 'raster',
+            source: 'ir-enhanced',
+            minzoom: 0,
+            maxzoom: 7,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.8,
             },
           },
         ],
@@ -333,6 +431,70 @@ export function MapView() {
     }
   }, [showCloudLayer]);
 
+  // Toggle KBOX Boston radar visibility
+  const toggleKbox = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showKbox;
+    setShowKbox(newVisibility);
+    try {
+      if (map.getLayer('kbox-layer')) {
+        map.setLayoutProperty('kbox-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle KBOX:', err);
+    }
+  }, [showKbox]);
+
+  // Toggle GOES GeoColor visibility
+  const toggleGoesGeocolor = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showGoesGeocolor;
+    setShowGoesGeocolor(newVisibility);
+    try {
+      if (map.getLayer('geocolor-layer')) {
+        map.setLayoutProperty('geocolor-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle GeoColor:', err);
+    }
+  }, [showGoesGeocolor]);
+
+  // Toggle MRMS radar visibility
+  const toggleMrms = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showMrms;
+    setShowMrms(newVisibility);
+    try {
+      if (map.getLayer('mrms-layer')) {
+        map.setLayoutProperty('mrms-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle MRMS:', err);
+    }
+  }, [showMrms]);
+
+  // Toggle Enhanced IR visibility
+  const toggleIrEnhanced = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showIrEnhanced;
+    setShowIrEnhanced(newVisibility);
+    try {
+      if (map.getLayer('ir-enhanced-layer')) {
+        map.setLayoutProperty('ir-enhanced-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle Enhanced IR:', err);
+    }
+  }, [showIrEnhanced]);
+
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
     if (radarFrames.length === 0) return '';
@@ -395,6 +557,39 @@ export function MapView() {
           title="Test Layer (NASA GIBS VIIRS)"
         >
           🧪
+        </button>
+
+        {/* New layers - all off by default */}
+        <button
+          className={`layer-icon-btn ${showKbox ? 'active' : ''}`}
+          onClick={toggleKbox}
+          title="KBOX Boston Radar"
+        >
+          📡
+        </button>
+
+        <button
+          className={`layer-icon-btn ${showGoesGeocolor ? 'active' : ''}`}
+          onClick={toggleGoesGeocolor}
+          title="GOES GeoColor (5 min)"
+        >
+          🌎
+        </button>
+
+        <button
+          className={`layer-icon-btn ${showMrms ? 'active' : ''}`}
+          onClick={toggleMrms}
+          title="MRMS Composite Radar"
+        >
+          🔬
+        </button>
+
+        <button
+          className={`layer-icon-btn ${showIrEnhanced ? 'active' : ''}`}
+          onClick={toggleIrEnhanced}
+          title="Enhanced IR Satellite"
+        >
+          🌊
         </button>
       </div>
 
