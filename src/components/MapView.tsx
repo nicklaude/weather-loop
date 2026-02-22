@@ -424,6 +424,36 @@ export function MapView() {
     }
   }, [radarFrames, currentFrameIndex, goesTimestamps]);
 
+  // Update KBOX radar tiles when slider moves (use IEM historical tiles)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || radarFrames.length === 0) return;
+
+    const currentFrame = radarFrames[currentFrameIndex];
+    if (!currentFrame) return;
+
+    // Convert unix timestamp to IEM format: YYYYMMDDHHmm (UTC)
+    const date = new Date(currentFrame.time * 1000);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hour = String(date.getUTCHours()).padStart(2, '0');
+    const min = String(date.getUTCMinutes()).padStart(2, '0');
+    const iemTimestamp = `${year}${month}${day}${hour}${min}`;
+
+    // Build the time-specific KBOX tile URL
+    // Format: ridge::BOX-N0Q-{timestamp}/z/x/y.png
+    const kboxUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-${iemTimestamp}/{z}/{x}/{y}.png`;
+
+    try {
+      if (map.getSource('kbox-radar')) {
+        (map.getSource('kbox-radar') as maplibregl.RasterTileSource).setTiles([kboxUrl]);
+      }
+    } catch (err) {
+      console.error('Failed to update KBOX tiles:', err);
+    }
+  }, [radarFrames, currentFrameIndex]);
+
   // Animation loop
   useEffect(() => {
     if (!isPlaying || radarFrames.length === 0) return;
@@ -653,9 +683,9 @@ export function MapView() {
         <button
           className={`layer-icon-btn ${showGoesGeocolor ? 'active' : ''}`}
           onClick={toggleGoesGeocolor}
-          title="GOES GeoColor (5 min)"
+          title="GOES GeoColor (5 min, animated)"
         >
-          🌎
+          🌥️
         </button>
 
         <button
