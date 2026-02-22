@@ -26,7 +26,7 @@ export function MapView() {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [showSatellite, setShowSatellite] = useState(true);
   const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
-  const [showTrueColor, setShowTrueColor] = useState(false); // EOX Sentinel-2 true color base, off by default
+  const [showTrueColor, setShowTrueColor] = useState(true); // EOX Sentinel-2 true color base, ON by default
   const [showTestLayer, setShowTestLayer] = useState(false); // Test layer for experiments (VIIRS)
   const [showCloudLayer, setShowCloudLayer] = useState(false); // Cloud infrared layer
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +37,7 @@ export function MapView() {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
+      attributionControl: false, // Hide the info button
       style: {
         version: 8,
         name: 'Weather Loop',
@@ -100,16 +101,13 @@ export function MapView() {
             minzoom: 0,
             maxzoom: 18,
           },
-          // EOX true color base layer (below satellite)
+          // EOX true color base layer (below satellite) - ON by default
           {
             id: 'eox-truecolor-layer',
             type: 'raster',
             source: 'eox-sentinel2',
             minzoom: 0,
             maxzoom: 14,
-            layout: {
-              visibility: 'none', // Off by default
-            },
             paint: {
               'raster-opacity': 0.9,
             },
@@ -465,10 +463,6 @@ export function MapView() {
         </span>
       </div>
 
-      {/* Footer */}
-      <div className="map-footer">
-        <span>NOAA GOES Satellite • NEXRAD Radar</span>
-      </div>
     </div>
   );
 }
