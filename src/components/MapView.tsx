@@ -34,6 +34,16 @@ export function MapView() {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
+      // Try to strip referer for RealEarth tiles
+      transformRequest: (url) => {
+        if (url.includes('realearth.ssec.wisc.edu')) {
+          return {
+            url,
+            referrerPolicy: 'no-referrer' as ReferrerPolicy,
+          };
+        }
+        return { url };
+      },
       style: {
         version: 8,
         name: 'Weather Loop',
