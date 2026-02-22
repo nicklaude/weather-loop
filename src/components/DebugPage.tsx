@@ -32,7 +32,8 @@ const DATA_SOURCES: Omit<SourceTest, 'status'>[] = [
   },
   {
     name: 'RainViewer Tiles (radar)',
-    url: 'https://tilecache.rainviewer.com/v2/radar/1708704600/256/5/9/12/2/1_1.png',
+    // URL will be dynamically updated with current timestamp before test
+    url: 'https://tilecache.rainviewer.com/v2/radar/DYNAMIC/256/5/9/12/2/1_1.png',
     type: 'image',
   },
   {
@@ -69,7 +70,7 @@ const DATA_SOURCES: Omit<SourceTest, 'status'>[] = [
   },
   {
     name: 'SSEC GOES IR Enhanced',
-    url: 'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-band13/5/9/12.png',
+    url: 'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-BAND13/5/9/12.png',
     type: 'image',
   },
   {
@@ -100,12 +101,9 @@ const DATA_SOURCES: Omit<SourceTest, 'status'>[] = [
     type: 'json',
   },
 
-  // === ALTERNATIVES ===
-  {
-    name: 'OpenWeatherMap Satellite (needs API key)',
-    url: 'https://tile.openweathermap.org/map/clouds_new/5/9/12.png?appid=demo',
-    type: 'image',
-  },
+  // === ALTERNATIVES (NOT TESTED - OPTIONAL) ===
+  // OpenWeatherMap requires API key signup - skipping automatic test
+  // To add: get key from https://openweathermap.org/api and add to URL
 ];
 
 async function testSource(source: Omit<SourceTest, 'status'>): Promise<SourceTest> {
@@ -277,8 +275,26 @@ export function DebugPage() {
     setTesting(true);
     setSources(DATA_SOURCES.map(s => ({ ...s, status: 'loading' as const })));
 
+    // Fetch dynamic data needed for tests
+    let rainviewerTimestamp = '';
+    try {
+      const rvResponse = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+      const rvData = await rvResponse.json();
+      rainviewerTimestamp = rvData.radar?.past?.[rvData.radar.past.length - 1]?.time || '';
+    } catch {
+      console.warn('Could not fetch RainViewer timestamp');
+    }
+
+    // Replace dynamic URLs
+    const sourcesWithDynamicUrls = DATA_SOURCES.map(s => {
+      if (s.url.includes('DYNAMIC') && rainviewerTimestamp) {
+        return { ...s, url: s.url.replace('DYNAMIC', String(rainviewerTimestamp)) };
+      }
+      return s;
+    });
+
     // Test all sources in parallel
-    const results = await Promise.all(DATA_SOURCES.map(testSource));
+    const results = await Promise.all(sourcesWithDynamicUrls.map(testSource));
     setSources(results);
     setLastRun(new Date().toLocaleString());
     setTesting(false);
