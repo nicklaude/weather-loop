@@ -78,15 +78,20 @@ const DATA_SOURCES: Omit<SourceTest, 'status'>[] = [
     type: 'json',
   },
 
-  // === NASA GIBS GOES (TESTING) ===
+  // === NASA GIBS GOES (TRUE COLOR SATELLITE - NO REFERER ISSUES) ===
   {
     name: 'NASA GIBS GOES-East GeoColor',
-    url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${new Date().toISOString().split('T')[0]}/GoogleMapsCompatible_Level8/5/12/9.jpg`,
+    url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/5/12/9.png',
     type: 'image',
   },
   {
     name: 'NASA GIBS GOES-West GeoColor',
-    url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/${new Date().toISOString().split('T')[0]}/GoogleMapsCompatible_Level8/5/12/9.jpg`,
+    url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/GoogleMapsCompatible_Level7/5/12/9.png',
+    type: 'image',
+  },
+  {
+    name: 'NASA GIBS GOES-East IR (Band13)',
+    url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_Band13_Clean_Infrared/default/GoogleMapsCompatible_Level6/5/12/9.png',
     type: 'image',
   },
   {

@@ -17,25 +17,13 @@ interface RainViewerData {
   };
 }
 
-// SSEC RealEarth GOES timestamp format: "20260222.214117" -> unix timestamp
-function parseGoesTimestamp(ts: string): number {
-  // Format: YYYYMMDD.hhmmss
-  const year = parseInt(ts.slice(0, 4));
-  const month = parseInt(ts.slice(4, 6)) - 1;
-  const day = parseInt(ts.slice(6, 8));
-  const hour = parseInt(ts.slice(9, 11));
-  const min = parseInt(ts.slice(11, 13));
-  const sec = parseInt(ts.slice(13, 15));
-  return new Date(Date.UTC(year, month, day, hour, min, sec)).getTime() / 1000;
-}
-
-// Convert unix timestamp to GOES tile URL date/time format
-function formatGoesTimestamp(ts: string): { date: string; time: string } {
-  // ts format: "20260222.214117"
-  return {
-    date: ts.slice(0, 8), // "20260222"
-    time: ts.slice(9),     // "214117"
-  };
+// Convert unix timestamp to ISO8601 format for NASA GIBS (round to 10min intervals)
+function formatGibsTimestamp(unixTime: number): string {
+  // GIBS GOES updates every 10 minutes, round to nearest 10 min
+  const date = new Date(unixTime * 1000);
+  const minutes = Math.floor(date.getUTCMinutes() / 10) * 10;
+  date.setUTCMinutes(minutes, 0, 0);
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z'); // e.g., "2026-02-22T22:00:00Z"
 }
 
 export function MapView() {
@@ -44,7 +32,6 @@ export function MapView() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [radarFrames, setRadarFrames] = useState<RainViewerFrame[]>([]);
-  const [goesTimestamps, setGoesTimestamps] = useState<string[]>([]); // GOES GeoColor timestamps
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [showSatellite, setShowSatellite] = useState(false); // Grayscale satellite OFF by default
   const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
@@ -127,16 +114,16 @@ export function MapView() {
             tileSize: 256,
             attribution: '© Iowa Environmental Mesonet',
           },
-          // GOES GeoColor - true color satellite from SSEC RealEarth (5 min updates)
-          // Tiles are added dynamically with time parameter
+          // GOES GeoColor - true color satellite from NASA GIBS (10 min updates, no referer issues)
+          // Uses GOES-East for Eastern US coverage - auto-defaults to latest available time
           'goes-geocolor': {
             type: 'raster',
             tiles: [
-              'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-geo-color/{z}/{x}/{y}.png'
+              'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png'
             ],
             tileSize: 256,
             maxzoom: 7,
-            attribution: '© SSEC RealEarth',
+            attribution: '© NASA GIBS GOES-East',
           },
           // MRMS - Multi-Radar Multi-Sensor composite (143 radars, 1km resolution)
           'mrms-radar': {
@@ -147,15 +134,15 @@ export function MapView() {
             tileSize: 256,
             attribution: '© IEM MRMS',
           },
-          // Enhanced IR - better cloud visualization
+          // Enhanced IR - GOES Band13 Clean Infrared from NASA GIBS (no referer issues)
           'ir-enhanced': {
             type: 'raster',
             tiles: [
-              'https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-band13/{z}/{x}/{y}.png'
+              'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_Band13_Clean_Infrared/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png'
             ],
             tileSize: 256,
-            maxzoom: 7,
-            attribution: '© SSEC RealEarth IR',
+            maxzoom: 6,
+            attribution: '© NASA GIBS GOES-East IR',
           },
         },
         layers: [
@@ -326,26 +313,9 @@ export function MapView() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch GOES GeoColor timestamps from SSEC RealEarth
-  useEffect(() => {
-    const fetchGoesTimestamps = async () => {
-      try {
-        const response = await fetch('https://realearth.ssec.wisc.edu/api/times?products=G19-ABI-CONUS-geo-color');
-        if (!response.ok) throw new Error('Failed to fetch GOES timestamps');
-        const data = await response.json();
-        const timestamps = data['G19-ABI-CONUS-geo-color'] || [];
-        setGoesTimestamps(timestamps);
-        console.log(`Loaded ${timestamps.length} GOES timestamps`);
-      } catch (err) {
-        console.error('Failed to fetch GOES timestamps:', err);
-      }
-    };
-
-    fetchGoesTimestamps();
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchGoesTimestamps, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // Note: GOES timestamps are no longer fetched from SSEC API
+  // NASA GIBS supports time-synced tiles directly using ISO8601 timestamps
+  // The goesTimestamps state is no longer needed - we derive times from radar frames
 
   // Add/update radar layer when frames change
   useEffect(() => {
@@ -386,34 +356,20 @@ export function MapView() {
     }
   }, [radarFrames, currentFrameIndex]);
 
-  // Update GOES GeoColor tiles when slider moves (snap to nearest available timestamp)
+  // Update GOES GeoColor tiles when slider moves (sync with radar time)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || radarFrames.length === 0 || goesTimestamps.length === 0) return;
+    if (!map || radarFrames.length === 0) return;
 
     const currentFrame = radarFrames[currentFrameIndex];
     if (!currentFrame) return;
 
-    // Find the nearest GOES timestamp to the current radar time
-    const targetTime = currentFrame.time;
-    let nearestIdx = 0;
-    let nearestDiff = Infinity;
+    // Convert radar timestamp to GIBS ISO8601 format (rounded to 10min)
+    const gibsTime = formatGibsTimestamp(currentFrame.time);
 
-    for (let i = 0; i < goesTimestamps.length; i++) {
-      const goesTime = parseGoesTimestamp(goesTimestamps[i]);
-      const diff = Math.abs(goesTime - targetTime);
-      if (diff < nearestDiff) {
-        nearestDiff = diff;
-        nearestIdx = i;
-      }
-    }
-
-    const nearestTimestamp = goesTimestamps[nearestIdx];
-    const { date, time } = formatGoesTimestamp(nearestTimestamp);
-
-    // Build the time-specific tile URL
-    // Format: /tiles/PRODUCT/YYYYMMDD/hhmmss/z/x/y.png
-    const goesUrl = `https://realearth.ssec.wisc.edu/tiles/G19-ABI-CONUS-geo-color/${date}/${time}/{z}/{x}/{y}.png`;
+    // Build the time-specific NASA GIBS tile URL
+    // Note: GIBS will auto-fallback to nearest available time if exact time doesn't exist
+    const goesUrl = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
 
     try {
       if (map.getSource('goes-geocolor')) {
@@ -422,7 +378,7 @@ export function MapView() {
     } catch (err) {
       console.error('Failed to update GOES GeoColor tiles:', err);
     }
-  }, [radarFrames, currentFrameIndex, goesTimestamps]);
+  }, [radarFrames, currentFrameIndex]);
 
   // Update KBOX radar tiles when slider moves (use IEM historical tiles)
   useEffect(() => {
