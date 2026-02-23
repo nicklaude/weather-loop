@@ -21,18 +21,18 @@
   z-index: 10;
 }
 
-/* Compact text layer buttons */
+/* Compact text layer buttons - sized for easy mobile tapping */
 .layer-text-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  height: 26px;
-  padding: 0 8px;
+  min-width: 52px;
+  height: 32px;
+  padding: 0 10px;
   background: rgba(0, 0, 0, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  font-size: 10px;
+  border-radius: 5px;
+  font-size: 11px;
   font-weight: 600;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
   color: rgba(255, 255, 255, 0.7);
@@ -305,10 +305,10 @@
   }
 
   .layer-text-btn {
-    min-width: 40px;
-    height: 24px;
-    padding: 0 6px;
-    font-size: 9px;
+    min-width: 48px;
+    height: 30px;
+    padding: 0 8px;
+    font-size: 10px;
   }
 
   .radar-legend {

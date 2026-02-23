@@ -107,7 +107,8 @@ export function MapView() {
             tileSize: 256,
             attribution: '© NOAA nowCOAST IR',
           },
-          // KBOX - Boston's local NEXRAD radar via Iowa Environmental Mesonet
+          // KBOX (Boston) - local NEXRAD radar via Iowa Environmental Mesonet
+          // Format: ridge::BOX-N0Q-0 where 0 = current, or timestamp for historical
           'kbox-radar': {
             type: 'raster',
             tiles: [
@@ -117,7 +118,8 @@ export function MapView() {
             attribution: '© Iowa Environmental Mesonet',
           },
           // GOES GeoColor - true color satellite from NASA GIBS (10 min updates, no referer issues)
-          // Uses GOES-East for Eastern US coverage - auto-defaults to latest available time
+          // Uses GOES-East for Eastern US coverage - omitting time returns latest available
+          // Time syncing with radar slider is done in useEffect
           'goes-geocolor': {
             type: 'raster',
             tiles: [
@@ -437,18 +439,26 @@ export function MapView() {
     const currentFrame = radarFrames[currentFrameIndex];
     if (!currentFrame) return;
 
-    // Convert unix timestamp to IEM format: YYYYMMDDHHmm (UTC)
-    const date = new Date(currentFrame.time * 1000);
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const hour = String(date.getUTCHours()).padStart(2, '0');
-    const min = String(date.getUTCMinutes()).padStart(2, '0');
-    const iemTimestamp = `${year}${month}${day}${hour}${min}`;
+    // Check if we're viewing recent data (within 10 minutes of now)
+    const isRecent = Math.abs(Date.now() / 1000 - currentFrame.time) < 600;
 
-    // Build the time-specific KBOX tile URL
-    // Format: ridge::BOX-N0Q-{timestamp}/z/x/y.png
-    const kboxUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-${iemTimestamp}/{z}/{x}/{y}.png`;
+    let kboxUrl: string;
+    if (isRecent) {
+      // Use 0 timestamp for current/live data
+      kboxUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-0/{z}/{x}/{y}.png';
+    } else {
+      // Convert unix timestamp to IEM format: YYYYMMDDHHmm (UTC)
+      const date = new Date(currentFrame.time * 1000);
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      const hour = String(date.getUTCHours()).padStart(2, '0');
+      const min = String(date.getUTCMinutes()).padStart(2, '0');
+      const iemTimestamp = `${year}${month}${day}${hour}${min}`;
+      // Build the time-specific KBOX tile URL
+      // Format: ridge::BOX-N0Q-{timestamp}/z/x/y.png
+      kboxUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-${iemTimestamp}/{z}/{x}/{y}.png`;
+    }
 
     try {
       if (map.getSource('kbox-radar')) {
