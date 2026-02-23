@@ -72,15 +72,15 @@
 
 /* Radar Legend - Bottom Left */
 .radar-legend {
-  position: absolute;
-  /* Account for playback bar + Safari bottom bar on mobile */
-  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  position: fixed;
+  /* Position above playback bar (~60px) + safe area */
+  bottom: calc(70px + env(safe-area-inset-bottom, 0px));
   left: 12px;
   background: rgba(0, 0, 0, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   padding: 10px 12px;
-  z-index: 10;
+  z-index: 15;
   backdrop-filter: blur(8px);
 }
 
@@ -156,16 +156,20 @@
 
 /* Playback Bar - Bottom */
 .playback-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  /* Add safe area inset for mobile browsers with bottom nav bars */
-  /* Safari toolbar is ~44px, plus safe area. Use larger minimum. */
-  padding-bottom: max(50px, calc(20px + env(safe-area-inset-bottom, 0px)));
-  background: rgba(0, 0, 0, 0.8);
+  /* Extend into safe area so it's flush with screen bottom */
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(0, 0, 0, 0.9);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 20;
 }
 
 .play-btn {
@@ -310,8 +314,8 @@
   }
 
   .radar-legend {
-    /* Mobile Safari bottom bar is ~44-50px, playback bar is ~60px, need extra padding */
-    bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+    /* Position above playback bar on mobile */
+    bottom: calc(65px + env(safe-area-inset-bottom, 0px));
     left: 8px;
     padding: 8px 10px;
   }
@@ -322,8 +326,8 @@
 
   .playback-bar {
     padding: 10px 12px;
-    /* Extra padding on mobile for Safari bottom bar (~44px) */
-    padding-bottom: max(55px, calc(24px + env(safe-area-inset-bottom, 0px)));
+    /* Extend into safe area - flush with screen edge */
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     gap: 8px;
   }
 
