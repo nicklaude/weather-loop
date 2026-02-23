@@ -153,6 +153,7 @@ export function MapView() {
   const [showGoesWest, setShowGoesWest] = useState(false); // GOES-West (Pacific/West coast coverage)
   const [mapLoaded, setMapLoaded] = useState(false); // Track when map is ready for layer operations
   const [error, setError] = useState<string | null>(null);
+  const [smoothRadar, setSmoothRadar] = useState(true); // Bilinear interpolation for radar (smoother vs blocky)
 
   // Initialize map
   useEffect(() => {
@@ -368,6 +369,7 @@ export function MapView() {
             },
             paint: {
               'raster-opacity': 0.8,
+              'raster-resampling': 'linear', // Bilinear for smoother appearance
             },
           },
           // GOES GeoColor true color layer
@@ -396,6 +398,7 @@ export function MapView() {
             },
             paint: {
               'raster-opacity': 0.75,
+              'raster-resampling': 'linear', // Bilinear for smoother appearance
             },
           },
           // Enhanced IR satellite layer
@@ -424,6 +427,7 @@ export function MapView() {
             },
             paint: {
               'raster-opacity': 0.75,
+              'raster-resampling': 'linear', // Bilinear for smoother appearance
             },
           },
           // NWS official radar layer
@@ -438,6 +442,7 @@ export function MapView() {
             },
             paint: {
               'raster-opacity': 0.75,
+              'raster-resampling': 'linear', // Bilinear interpolation for smoother appearance
             },
           },
           // GOES-West GeoColor layer (Pacific/Western US)
@@ -559,6 +564,7 @@ export function MapView() {
           },
           paint: {
             'raster-opacity': 0.75,
+            'raster-resampling': smoothRadar ? 'linear' : 'nearest', // Bilinear vs blocky
           },
         });
       }
@@ -571,47 +577,8 @@ export function MapView() {
   // Time-synced GOES was causing 404s because GIBS doesn't have data for all timestamps
   // The initial source URL already points to latest, so no dynamic update needed
 
-  // Update KBOX radar tiles when slider moves (use IEM historical tiles)
-  // Only update if KBOX layer is visible
-  // Uses debounced frame index for consistency with radar layer
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoaded || radarFrames.length === 0 || !showKbox) return;
-
-    const currentFrame = radarFrames[debouncedFrameIndex];
-    if (!currentFrame) return;
-
-    // Check if we're viewing recent data (within 10 minutes of now)
-    const isRecent = Math.abs(Date.now() / 1000 - currentFrame.time) < 600;
-
-    let kboxUrl: string;
-    if (isRecent) {
-      // Use 0 timestamp for current/live data
-      // Proxy through Cloudflare Worker in production
-      kboxUrl = proxyIemUrl('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-0/{z}/{x}/{y}.png');
-    } else {
-      // Convert unix timestamp to IEM format: YYYYMMDDHHmm (UTC)
-      const date = new Date(currentFrame.time * 1000);
-      const year = date.getUTCFullYear();
-      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(date.getUTCDate()).padStart(2, '0');
-      const hour = String(date.getUTCHours()).padStart(2, '0');
-      const min = String(date.getUTCMinutes()).padStart(2, '0');
-      const iemTimestamp = `${year}${month}${day}${hour}${min}`;
-      // Build the time-specific KBOX tile URL
-      // Format: ridge::BOX-N0Q-{timestamp}/z/x/y.png
-      // Proxy through Cloudflare Worker in production
-      kboxUrl = proxyIemUrl(`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-${iemTimestamp}/{z}/{x}/{y}.png`);
-    }
-
-    try {
-      if (map.getSource('kbox-radar')) {
-        (map.getSource('kbox-radar') as maplibregl.RasterTileSource).setTiles([kboxUrl]);
-      }
-    } catch (err) {
-      console.error('Failed to update KBOX tiles:', err);
-    }
-  }, [radarFrames, debouncedFrameIndex, mapLoaded, showKbox]);
+  // KBOX is now live-only (no historical tiles) - IEM archive has gaps/missing data
+  // The source URL is set at initialization time, no need to update based on slider
 
   // Preload radar frames when RAIN layer is enabled
   // Uses progressive loading: current frame first, then others with delays
@@ -873,6 +840,28 @@ export function MapView() {
     }
   }, [showGoesWest]);
 
+  // Toggle smooth radar (bilinear vs nearest neighbor interpolation)
+  const toggleSmoothRadar = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newSmooth = !smoothRadar;
+    setSmoothRadar(newSmooth);
+    const resamplingMode = newSmooth ? 'linear' : 'nearest';
+
+    try {
+      // Update all radar layers
+      const radarLayers = ['radar-layer', 'nws-radar-layer', 'kbox-layer', 'mrms-layer', 'iem-animated-layer'];
+      radarLayers.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+          map.setPaintProperty(layerId, 'raster-resampling', resamplingMode);
+        }
+      });
+    } catch (err) {
+      console.error('Failed to toggle smooth radar:', err);
+    }
+  }, [smoothRadar]);
+
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
     if (radarFrames.length === 0) return '';
@@ -993,6 +982,16 @@ export function MapView() {
           title="NWS Official Radar"
         >
           NWS
+        </button>
+
+        <div className="layer-divider" />
+
+        <button
+          className={`layer-text-btn ${smoothRadar ? 'active' : ''}`}
+          onClick={toggleSmoothRadar}
+          title="Toggle smooth radar (bilinear vs blocky)"
+        >
+          {smoothRadar ? '🔮' : '🧱'}
         </button>
       </div>
 
