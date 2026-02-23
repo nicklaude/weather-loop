@@ -105,10 +105,10 @@ export function MapView() {
   const [showCloudLayer, setShowCloudLayer] = useState(false); // Cloud infrared layer
   const [showKbox, setShowKbox] = useState(false); // KBOX Boston radar
   const [showGoesGeocolor, setShowGoesGeocolor] = useState(false); // GOES GeoColor true color
-  const [showMrms, setShowMrms] = useState(true); // MRMS high-res composite radar ON by default
+  const [showMrms, setShowMrms] = useState(false); // MRMS high-res composite radar
   const [showIrEnhanced, setShowIrEnhanced] = useState(false); // Enhanced IR satellite
   const [showIemAnimated, setShowIemAnimated] = useState(false); // IEM Animated NEXRAD composite
-  const [showNwsRadar, setShowNwsRadar] = useState(false); // NWS official radar OFF (flaky WMS)
+  const [showNwsRadar, setShowNwsRadar] = useState(true); // NWS official radar ON by default
   const [showGoesWest, setShowGoesWest] = useState(false); // GOES-West (Pacific/West coast coverage)
   const [mapLoaded, setMapLoaded] = useState(false); // Track when map is ready for layer operations
   const [error, setError] = useState<string | null>(null);
@@ -329,7 +329,7 @@ export function MapView() {
             type: 'raster',
             source: 'goes-geocolor',
             minzoom: 0,
-            maxzoom: 7,
+            // No maxzoom - allow overzoom (tiles scaled up) at higher zoom levels
             layout: {
               visibility: 'none', // Off by default
             },
@@ -357,7 +357,7 @@ export function MapView() {
             type: 'raster',
             source: 'ir-enhanced',
             minzoom: 0,
-            maxzoom: 7,
+            // No maxzoom - allow overzoom at higher zoom levels
             layout: {
               visibility: 'none', // Off by default
             },
@@ -399,7 +399,7 @@ export function MapView() {
             type: 'raster',
             source: 'goes-west',
             minzoom: 0,
-            maxzoom: 7,
+            // No maxzoom - allow overzoom at higher zoom levels
             layout: {
               visibility: 'none', // Off by default
             },
@@ -419,9 +419,9 @@ export function MapView() {
     map.on('load', () => {
       setIsLoading(false);
       setMapLoaded(true);
-      // Set MRMS radar layer to visible by default (matches state)
-      if (map.getLayer('mrms-layer')) {
-        map.setLayoutProperty('mrms-layer', 'visibility', 'visible');
+      // Set NWS radar layer to visible by default (matches state)
+      if (map.getLayer('nws-radar-layer')) {
+        map.setLayoutProperty('nws-radar-layer', 'visibility', 'visible');
       }
     });
 
