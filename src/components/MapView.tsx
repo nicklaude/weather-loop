@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { RefreshCw } from 'lucide-react';
 import './MapView.css';
+import { proxyRainViewerUrl, proxyIemUrl, proxyGibsUrl } from '../lib/tileProxy';
 
 // RainViewer API for pre-tiled radar
 interface RainViewerFrame {
@@ -139,10 +140,11 @@ export function MapView() {
             attribution: '© EOX Sentinel-2 Cloudless',
           },
           // NASA GIBS VIIRS True Color - daily satellite (NO stitching gaps unlike MODIS!)
+          // Proxied through Cloudflare Worker in production
           'gibs-viirs': {
             type: 'raster',
             tiles: [
-              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${new Date(Date.now() - 86400000).toISOString().split('T')[0]}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+              proxyGibsUrl(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${new Date(Date.now() - 86400000).toISOString().split('T')[0]}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`),
             ],
             tileSize: 256,
             maxzoom: 9,
@@ -159,40 +161,43 @@ export function MapView() {
           },
           // KBOX (Boston) - local NEXRAD radar via Iowa Environmental Mesonet
           // Format: ridge::BOX-N0Q-0 where 0 = current, or timestamp for historical
+          // Proxied through Cloudflare Worker in production
           'kbox-radar': {
             type: 'raster',
             tiles: [
-              'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-0/{z}/{x}/{y}.png'
+              proxyIemUrl('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-0/{z}/{x}/{y}.png')
             ],
             tileSize: 256,
             attribution: '© Iowa Environmental Mesonet',
           },
           // GOES GeoColor - true color satellite from NASA GIBS (10 min updates, no referer issues)
           // Uses GOES-East for Eastern US coverage - omitting time returns latest available
-          // Time syncing with radar slider is done in useEffect
+          // Proxied through Cloudflare Worker in production
           'goes-geocolor': {
             type: 'raster',
             tiles: [
-              'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png'
+              proxyGibsUrl('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png')
             ],
             tileSize: 256,
             maxzoom: 7,
             attribution: '© NASA GIBS GOES-East',
           },
           // MRMS - Multi-Radar Multi-Sensor composite (143 radars, 1km resolution)
+          // Proxied through Cloudflare Worker in production
           'mrms-radar': {
             type: 'raster',
             tiles: [
-              'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-n1p-900913/{z}/{x}/{y}.png'
+              proxyIemUrl('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-n1p-900913/{z}/{x}/{y}.png')
             ],
             tileSize: 256,
             attribution: '© IEM MRMS',
           },
           // Enhanced IR - GOES Band13 Clean Infrared from NASA GIBS (no referer issues)
+          // Proxied through Cloudflare Worker in production
           'ir-enhanced': {
             type: 'raster',
             tiles: [
-              'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_Band13_Clean_Infrared/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png'
+              proxyGibsUrl('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_Band13_Clean_Infrared/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png')
             ],
             tileSize: 256,
             maxzoom: 6,
@@ -200,10 +205,11 @@ export function MapView() {
           },
           // IEM Animated NEXRAD - composite radar with 50 min history, updates every 5 min
           // Good alternative to RainViewer to reduce rate limiting
+          // Proxied through Cloudflare Worker in production
           'iem-animated': {
             type: 'raster',
             tiles: [
-              'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png'
+              proxyIemUrl('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png')
             ],
             tileSize: 256,
             attribution: '© Iowa Environmental Mesonet',
@@ -219,10 +225,11 @@ export function MapView() {
           },
           // GOES-West GeoColor - alternative true color for Pacific/West coast (10 min updates)
           // Useful as fallback when GOES-East has gaps or for western US coverage
+          // Proxied through Cloudflare Worker in production
           'goes-west': {
             type: 'raster',
             tiles: [
-              'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png'
+              proxyGibsUrl('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png')
             ],
             tileSize: 256,
             maxzoom: 7,
@@ -465,7 +472,8 @@ export function MapView() {
     if (!currentFrame) return;
 
     // Color scheme 2 = original, smooth=1, snow=1
-    const radarUrl = `https://tilecache.rainviewer.com${currentFrame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+    // Proxy through Cloudflare Worker in production to avoid CORS/rate limiting
+    const radarUrl = proxyRainViewerUrl(`https://tilecache.rainviewer.com${currentFrame.path}/256/{z}/{x}/{y}/2/1_1.png`);
 
     try {
       if (map.getSource('radar')) {
@@ -519,7 +527,8 @@ export function MapView() {
     let kboxUrl: string;
     if (isRecent) {
       // Use 0 timestamp for current/live data
-      kboxUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-0/{z}/{x}/{y}.png';
+      // Proxy through Cloudflare Worker in production
+      kboxUrl = proxyIemUrl('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-0/{z}/{x}/{y}.png');
     } else {
       // Convert unix timestamp to IEM format: YYYYMMDDHHmm (UTC)
       const date = new Date(currentFrame.time * 1000);
@@ -531,7 +540,8 @@ export function MapView() {
       const iemTimestamp = `${year}${month}${day}${hour}${min}`;
       // Build the time-specific KBOX tile URL
       // Format: ridge::BOX-N0Q-{timestamp}/z/x/y.png
-      kboxUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-${iemTimestamp}/{z}/{x}/{y}.png`;
+      // Proxy through Cloudflare Worker in production
+      kboxUrl = proxyIemUrl(`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::BOX-N0Q-${iemTimestamp}/{z}/{x}/{y}.png`);
     }
 
     try {
@@ -565,10 +575,11 @@ export function MapView() {
     const tilesToPreload: string[] = [];
 
     // Preload RainViewer radar frames
+    // Use proxy in production for caching benefits
     for (const frame of radarFrames) {
       for (const tile of limitedTiles) {
         tilesToPreload.push(
-          `https://tilecache.rainviewer.com${frame.path}/256/${tile.z}/${tile.x}/${tile.y}/2/1_1.png`
+          proxyRainViewerUrl(`https://tilecache.rainviewer.com${frame.path}/256/${tile.z}/${tile.x}/${tile.y}/2/1_1.png`)
         );
       }
     }
