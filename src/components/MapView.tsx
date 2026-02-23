@@ -18,9 +18,19 @@ interface RainViewerData {
 }
 
 // Convert unix timestamp to ISO8601 format for NASA GIBS (round to 10min intervals)
-function formatGibsTimestamp(unixTime: number): string {
+// Returns null if timestamp is in the future (no data available yet)
+function formatGibsTimestamp(unixTime: number): string | null {
+  const now = Date.now();
+  const requestedTime = unixTime * 1000;
+
+  // If requested time is more than 20 minutes in the future, no data exists
+  // (GIBS has ~10-20 min latency for GOES imagery)
+  if (requestedTime > now + 20 * 60 * 1000) {
+    return null; // Signal to use latest available
+  }
+
   // GIBS GOES updates every 10 minutes, round to nearest 10 min
-  const date = new Date(unixTime * 1000);
+  const date = new Date(requestedTime);
   const minutes = Math.floor(date.getUTCMinutes() / 10) * 10;
   date.setUTCMinutes(minutes, 0, 0);
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z'); // e.g., "2026-02-22T22:00:00Z"
@@ -89,7 +99,7 @@ export function MapView() {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const hasPreloadedRef = useRef(false); // Track if we've already preloaded
   const [showSatellite, setShowSatellite] = useState(false); // Grayscale satellite OFF by default
-  const [showRadar, setShowRadar] = useState(true); // Default ON - matches layer default
+  const [showRadar, setShowRadar] = useState(false); // RainViewer radar OFF by default
   const [showTrueColor, setShowTrueColor] = useState(true); // EOX Sentinel-2 true color base, ON by default
   const [showTestLayer, setShowTestLayer] = useState(false); // Test layer for experiments (VIIRS)
   const [showCloudLayer, setShowCloudLayer] = useState(false); // Cloud infrared layer
@@ -98,8 +108,9 @@ export function MapView() {
   const [showMrms, setShowMrms] = useState(false); // MRMS high-res composite radar
   const [showIrEnhanced, setShowIrEnhanced] = useState(false); // Enhanced IR satellite
   const [showIemAnimated, setShowIemAnimated] = useState(false); // IEM Animated NEXRAD composite
-  const [showNwsRadar, setShowNwsRadar] = useState(false); // NWS official radar
+  const [showNwsRadar, setShowNwsRadar] = useState(true); // NWS official radar ON by default
   const [showGoesWest, setShowGoesWest] = useState(false); // GOES-West (Pacific/West coast coverage)
+  const [mapLoaded, setMapLoaded] = useState(false); // Track when map is ready for layer operations
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -407,6 +418,11 @@ export function MapView() {
 
     map.on('load', () => {
       setIsLoading(false);
+      setMapLoaded(true);
+      // Set NWS radar layer to visible by default (matches state)
+      if (map.getLayer('nws-radar-layer')) {
+        map.setLayoutProperty('nws-radar-layer', 'visibility', 'visible');
+      }
     });
 
     map.on('error', (e) => {
@@ -454,7 +470,7 @@ export function MapView() {
   // Add/update radar layer when frames change
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || radarFrames.length === 0) return;
+    if (!map || !mapLoaded || radarFrames.length === 0) return;
 
     const currentFrame = radarFrames[currentFrameIndex];
     if (!currentFrame) return;
@@ -488,12 +504,13 @@ export function MapView() {
     } catch (err) {
       console.error('Failed to update radar layer:', err);
     }
-  }, [radarFrames, currentFrameIndex]);
+  }, [radarFrames, currentFrameIndex, mapLoaded]);
 
   // Update GOES GeoColor tiles when slider moves (sync with radar time)
+  // Only update if the GOES layer is visible to avoid unnecessary 404s
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || radarFrames.length === 0) return;
+    if (!map || !mapLoaded || radarFrames.length === 0 || !showGoesGeocolor) return;
 
     const currentFrame = radarFrames[currentFrameIndex];
     if (!currentFrame) return;
@@ -502,8 +519,10 @@ export function MapView() {
     const gibsTime = formatGibsTimestamp(currentFrame.time);
 
     // Build the time-specific NASA GIBS tile URL
-    // Note: GIBS will auto-fallback to nearest available time if exact time doesn't exist
-    const goesUrl = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
+    // If gibsTime is null (future time), use URL without timestamp to get latest available
+    const goesUrl = gibsTime
+      ? `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`
+      : `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
 
     try {
       if (map.getSource('goes-geocolor')) {
@@ -512,12 +531,13 @@ export function MapView() {
     } catch (err) {
       console.error('Failed to update GOES GeoColor tiles:', err);
     }
-  }, [radarFrames, currentFrameIndex]);
+  }, [radarFrames, currentFrameIndex, mapLoaded, showGoesGeocolor]);
 
   // Update GOES-West tiles when slider moves (sync with radar time)
+  // Only update if the GOES-West layer is visible to avoid unnecessary 404s
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || radarFrames.length === 0) return;
+    if (!map || !mapLoaded || radarFrames.length === 0 || !showGoesWest) return;
 
     const currentFrame = radarFrames[currentFrameIndex];
     if (!currentFrame) return;
@@ -526,7 +546,10 @@ export function MapView() {
     const gibsTime = formatGibsTimestamp(currentFrame.time);
 
     // Build the time-specific NASA GIBS tile URL for GOES-West
-    const goesWestUrl = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
+    // If gibsTime is null (future time), use URL without timestamp to get latest available
+    const goesWestUrl = gibsTime
+      ? `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`
+      : `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
 
     try {
       if (map.getSource('goes-west')) {
@@ -535,12 +558,13 @@ export function MapView() {
     } catch (err) {
       console.error('Failed to update GOES-West tiles:', err);
     }
-  }, [radarFrames, currentFrameIndex]);
+  }, [radarFrames, currentFrameIndex, mapLoaded, showGoesWest]);
 
   // Update KBOX radar tiles when slider moves (use IEM historical tiles)
+  // Only update if KBOX layer is visible
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || radarFrames.length === 0) return;
+    if (!map || !mapLoaded || radarFrames.length === 0 || !showKbox) return;
 
     const currentFrame = radarFrames[currentFrameIndex];
     if (!currentFrame) return;
@@ -573,41 +597,30 @@ export function MapView() {
     } catch (err) {
       console.error('Failed to update KBOX tiles:', err);
     }
-  }, [radarFrames, currentFrameIndex]);
+  }, [radarFrames, currentFrameIndex, mapLoaded, showKbox]);
 
-  // Preload ALL radar frames upfront when map loads (like PSU GOES loop)
-  // This enables smooth scrubbing since all images are already cached
+  // Preload radar frames when RAIN layer is enabled
+  // Only preload when layer is visible to avoid unnecessary network requests
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || radarFrames.length === 0 || hasPreloadedRef.current) return;
+    if (!map || !mapLoaded || radarFrames.length === 0 || !showRadar || hasPreloadedRef.current) return;
 
-    // Wait for map to be fully loaded
-    if (!map.loaded()) {
-      const onLoad = () => {
-        map.off('load', onLoad);
-        // Trigger re-run of this effect
-        setIsPreloading(true);
-      };
-      map.on('load', onLoad);
-      return;
-    }
-
-    // Start preloading all frames
+    // Start preloading
     setIsPreloading(true);
     hasPreloadedRef.current = true;
 
     const bounds = map.getBounds();
     const currentZoom = map.getZoom();
-    const z = Math.floor(currentZoom);
+    const z = Math.min(7, Math.floor(currentZoom)); // RainViewer maxzoom is 7
 
     // Get tiles for current viewport
     const tiles = getTileCoords(bounds, z);
-    // Limit to reasonable number of tiles
-    const limitedTiles = tiles.slice(0, 30);
+    // Limit to reasonable number of tiles (reduced from 30 to 15 to avoid 503s)
+    const limitedTiles = tiles.slice(0, 15);
 
     const tilesToPreload: string[] = [];
 
-    // Preload ALL RainViewer radar frames (the main source of choppiness)
+    // Preload RainViewer radar frames
     for (const frame of radarFrames) {
       for (const tile of limitedTiles) {
         tilesToPreload.push(
@@ -616,7 +629,7 @@ export function MapView() {
       }
     }
 
-    console.log(`Preloading ALL ${radarFrames.length} frames (${tilesToPreload.length} total tiles)...`);
+    console.log(`Preloading ${radarFrames.length} radar frames (${tilesToPreload.length} total tiles)...`);
 
     preloadTileUrls(tilesToPreload, (loaded, total) => {
       setPreloadProgress(Math.round((loaded / total) * 100));
@@ -625,25 +638,27 @@ export function MapView() {
       setIsPreloading(false);
       setPreloadProgress(100);
     });
-  }, [radarFrames]);
+  }, [radarFrames, mapLoaded, showRadar]);
 
-  // Also preload GOES-East frames when that layer is enabled
+  // Preload GOES-East frames when that layer is enabled
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || radarFrames.length === 0 || !showGoesGeocolor) return;
+    if (!map || !mapLoaded || radarFrames.length === 0 || !showGoesGeocolor) return;
 
     const bounds = map.getBounds();
     const currentZoom = map.getZoom();
     const z = Math.min(7, Math.floor(currentZoom)); // GOES maxzoom is 7
 
     const tiles = getTileCoords(bounds, z);
-    const limitedTiles = tiles.slice(0, 20);
+    // Reduced tile count to avoid 503 errors
+    const limitedTiles = tiles.slice(0, 10);
 
     const tilesToPreload: string[] = [];
 
-    // Preload ALL GOES-East frames for current viewport
+    // Preload GOES-East frames for current viewport (skip future times)
     for (const frame of radarFrames) {
       const gibsTime = formatGibsTimestamp(frame.time);
+      if (!gibsTime) continue; // Skip future frames
       for (const tile of limitedTiles) {
         tilesToPreload.push(
           `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/${tile.z}/${tile.y}/${tile.x}.png`
@@ -651,27 +666,29 @@ export function MapView() {
       }
     }
 
-    console.log(`Preloading GOES-East tiles for ${radarFrames.length} frames...`);
+    console.log(`Preloading GOES-East tiles (${tilesToPreload.length} tiles)...`);
     preloadTileUrls(tilesToPreload);
-  }, [radarFrames, showGoesGeocolor]);
+  }, [radarFrames, showGoesGeocolor, mapLoaded]);
 
-  // Also preload GOES-West frames when that layer is enabled
+  // Preload GOES-West frames when that layer is enabled
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || radarFrames.length === 0 || !showGoesWest) return;
+    if (!map || !mapLoaded || radarFrames.length === 0 || !showGoesWest) return;
 
     const bounds = map.getBounds();
     const currentZoom = map.getZoom();
     const z = Math.min(7, Math.floor(currentZoom)); // GOES maxzoom is 7
 
     const tiles = getTileCoords(bounds, z);
-    const limitedTiles = tiles.slice(0, 20);
+    // Reduced tile count to avoid 503 errors
+    const limitedTiles = tiles.slice(0, 10);
 
     const tilesToPreload: string[] = [];
 
-    // Preload ALL GOES-West frames for current viewport
+    // Preload GOES-West frames for current viewport (skip future times)
     for (const frame of radarFrames) {
       const gibsTime = formatGibsTimestamp(frame.time);
+      if (!gibsTime) continue; // Skip future frames
       for (const tile of limitedTiles) {
         tilesToPreload.push(
           `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/${tile.z}/${tile.y}/${tile.x}.png`
@@ -679,9 +696,9 @@ export function MapView() {
       }
     }
 
-    console.log(`Preloading GOES-West tiles for ${radarFrames.length} frames...`);
+    console.log(`Preloading GOES-West tiles (${tilesToPreload.length} tiles)...`);
     preloadTileUrls(tilesToPreload);
-  }, [radarFrames, showGoesWest]);
+  }, [radarFrames, showGoesWest, mapLoaded]);
 
   // Animation loop - use longer interval to avoid CORS/rate limit issues
   useEffect(() => {
