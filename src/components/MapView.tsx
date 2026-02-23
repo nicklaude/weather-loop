@@ -26,6 +26,37 @@ function formatGibsTimestamp(unixTime: number): string {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z'); // e.g., "2026-02-22T22:00:00Z"
 }
 
+// Preload tile images in background for smoother transitions
+// Uses browser's built-in image cache
+function preloadTileUrls(urls: string[]): void {
+  urls.forEach(url => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+  });
+}
+
+// Get tile coordinates for a given bounds and zoom level
+function getTileCoords(bounds: maplibregl.LngLatBounds, zoom: number): { x: number; y: number; z: number }[] {
+  const z = Math.floor(zoom);
+  const tiles: { x: number; y: number; z: number }[] = [];
+
+  // Convert lat/lng to tile coords
+  const n = Math.pow(2, z);
+  const minX = Math.floor((bounds.getWest() + 180) / 360 * n);
+  const maxX = Math.floor((bounds.getEast() + 180) / 360 * n);
+  const minY = Math.floor((1 - Math.log(Math.tan(bounds.getNorth() * Math.PI / 180) + 1 / Math.cos(bounds.getNorth() * Math.PI / 180)) / Math.PI) / 2 * n);
+  const maxY = Math.floor((1 - Math.log(Math.tan(bounds.getSouth() * Math.PI / 180) + 1 / Math.cos(bounds.getSouth() * Math.PI / 180)) / Math.PI) / 2 * n);
+
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      tiles.push({ x: Math.max(0, Math.min(x, n - 1)), y: Math.max(0, Math.min(y, n - 1)), z });
+    }
+  }
+
+  return tiles;
+}
+
 export function MapView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -53,6 +84,8 @@ export function MapView() {
     const map = new maplibregl.Map({
       container: containerRef.current,
       attributionControl: false, // Hide the info button
+      maxTileCacheSize: 500, // Increase tile cache for smoother zooming
+      maxTileCacheZoomLevels: 8, // Cache more zoom levels
       style: {
         version: 8,
         name: 'Weather Loop',
@@ -468,6 +501,75 @@ export function MapView() {
       console.error('Failed to update KBOX tiles:', err);
     }
   }, [radarFrames, currentFrameIndex]);
+
+  // Preload GOES tiles at adjacent zoom levels and upcoming radar frames
+  // This runs when GOES is visible and radar frames are loaded
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || radarFrames.length === 0 || !showGoesGeocolor) return;
+
+    // Debounce to avoid excessive preloading
+    const timeoutId = setTimeout(() => {
+      const bounds = map.getBounds();
+      const currentZoom = map.getZoom();
+
+      // Preload adjacent zoom levels (z-1 and z+1) for current viewport
+      const zoomLevels = [
+        Math.max(0, Math.floor(currentZoom) - 1),
+        Math.floor(currentZoom),
+        Math.min(7, Math.floor(currentZoom) + 1)
+      ];
+
+      const tilesToPreload: string[] = [];
+
+      // Preload tiles for nearby frames (current ±3 frames)
+      const startIdx = Math.max(0, currentFrameIndex - 3);
+      const endIdx = Math.min(radarFrames.length - 1, currentFrameIndex + 3);
+
+      for (let frameIdx = startIdx; frameIdx <= endIdx; frameIdx++) {
+        const frame = radarFrames[frameIdx];
+        if (!frame) continue;
+
+        const gibsTime = formatGibsTimestamp(frame.time);
+
+        for (const z of zoomLevels) {
+          const tiles = getTileCoords(bounds, z);
+          // Limit tiles per zoom level to avoid overwhelming the browser
+          const limitedTiles = tiles.slice(0, 20);
+
+          for (const tile of limitedTiles) {
+            // GOES GeoColor uses {z}/{y}/{x} order
+            tilesToPreload.push(
+              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/${tile.z}/${tile.y}/${tile.x}.png`
+            );
+          }
+        }
+      }
+
+      // Preload RainViewer tiles too
+      for (let frameIdx = startIdx; frameIdx <= endIdx; frameIdx++) {
+        const frame = radarFrames[frameIdx];
+        if (!frame) continue;
+
+        for (const z of zoomLevels) {
+          const tiles = getTileCoords(bounds, z);
+          const limitedTiles = tiles.slice(0, 20);
+
+          for (const tile of limitedTiles) {
+            tilesToPreload.push(
+              `https://tilecache.rainviewer.com${frame.path}/256/${tile.z}/${tile.x}/${tile.y}/2/1_1.png`
+            );
+          }
+        }
+      }
+
+      // Preload in batches to avoid network congestion
+      console.log(`Preloading ${tilesToPreload.length} tiles...`);
+      preloadTileUrls(tilesToPreload);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [radarFrames, currentFrameIndex, showGoesGeocolor]);
 
   // Animation loop - use longer interval to avoid CORS/rate limit issues
   useEffect(() => {
