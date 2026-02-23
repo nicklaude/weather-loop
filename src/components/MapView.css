@@ -152,6 +152,27 @@
   color: #ef4444;
 }
 
+/* Preload indicator - show in corner while loading frames */
+.preload-indicator {
+  top: auto;
+  bottom: 80px;
+  left: auto;
+  right: 12px;
+  transform: none;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  flex-direction: row;
+  gap: 8px;
+  z-index: 25;
+}
+
+.preload-indicator svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* Playback Bar - Bottom */
 .playback-bar {
   position: fixed;
