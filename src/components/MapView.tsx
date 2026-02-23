@@ -43,6 +43,7 @@ export function MapView() {
   const [showMrms, setShowMrms] = useState(false); // MRMS high-res composite radar
   const [showIrEnhanced, setShowIrEnhanced] = useState(false); // Enhanced IR satellite
   const [showIemAnimated, setShowIemAnimated] = useState(false); // IEM Animated NEXRAD composite
+  const [showNwsRadar, setShowNwsRadar] = useState(false); // NWS official radar
   const [error, setError] = useState<string | null>(null);
 
   // Initialize map
@@ -154,6 +155,15 @@ export function MapView() {
             ],
             tileSize: 256,
             attribution: '© Iowa Environmental Mesonet',
+          },
+          // NWS Radar - official NOAA radar via WMS (alternative source)
+          'nws-radar': {
+            type: 'raster',
+            tiles: [
+              'https://mapservices.weather.noaa.gov/eventdriven/services/radar/radar_base_reflectivity/MapServer/WMSServer?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=0&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true'
+            ],
+            tileSize: 256,
+            attribution: '© NWS',
           },
         },
         layers: [
@@ -278,6 +288,20 @@ export function MapView() {
             id: 'iem-animated-layer',
             type: 'raster',
             source: 'iem-animated',
+            minzoom: 0,
+            maxzoom: 10,
+            layout: {
+              visibility: 'none', // Off by default
+            },
+            paint: {
+              'raster-opacity': 0.75,
+            },
+          },
+          // NWS official radar layer
+          {
+            id: 'nws-radar-layer',
+            type: 'raster',
+            source: 'nws-radar',
             minzoom: 0,
             maxzoom: 10,
             layout: {
@@ -604,6 +628,22 @@ export function MapView() {
     }
   }, [showIemAnimated]);
 
+  // Toggle NWS Radar visibility
+  const toggleNwsRadar = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newVisibility = !showNwsRadar;
+    setShowNwsRadar(newVisibility);
+    try {
+      if (map.getLayer('nws-radar-layer')) {
+        map.setLayoutProperty('nws-radar-layer', 'visibility', newVisibility ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.error('Failed to toggle NWS Radar:', err);
+    }
+  }, [showNwsRadar]);
+
   // Get timestamp for current frame
   const getCurrentTimestamp = () => {
     if (radarFrames.length === 0) return '';
@@ -626,87 +666,96 @@ export function MapView() {
 
   return (
     <div className="map-view">
-      {/* Layer Controls - Icon buttons */}
+      {/* Layer Controls - Compact text buttons */}
       <div className="layer-controls">
         <button
-          className={`layer-icon-btn ${showSatellite ? 'active' : ''}`}
-          onClick={toggleSatellite}
-          title="Satellite (nowCOAST visible)"
-        >
-          🛰️
-        </button>
-
-        <button
-          className={`layer-icon-btn ${showRadar ? 'active' : ''}`}
-          onClick={toggleRadar}
-          title="Radar (NEXRAD)"
-        >
-          🌧️
-        </button>
-
-        <button
-          className={`layer-icon-btn ${showTrueColor ? 'active' : ''}`}
+          className={`layer-text-btn ${showTrueColor ? 'active' : ''}`}
           onClick={toggleTrueColor}
-          title="True Color Base (EOX Sentinel-2)"
+          title="EOX Sentinel-2 True Color Base"
         >
-          🌍
+          EOX
         </button>
 
         <button
-          className={`layer-icon-btn ${showCloudLayer ? 'active' : ''}`}
+          className={`layer-text-btn ${showSatellite ? 'active' : ''}`}
+          onClick={toggleSatellite}
+          title="nowCOAST Visible Satellite"
+        >
+          SAT
+        </button>
+
+        <button
+          className={`layer-text-btn ${showCloudLayer ? 'active' : ''}`}
           onClick={toggleCloudLayer}
-          title="Cloud Infrared (NOAA)"
+          title="NOAA Cloud Infrared"
         >
-          ☁️
+          IR
         </button>
 
         <button
-          className={`layer-icon-btn test-btn ${showTestLayer ? 'active' : ''}`}
+          className={`layer-text-btn ${showGoesGeocolor ? 'active' : ''}`}
+          onClick={toggleGoesGeocolor}
+          title="GOES GeoColor True Color"
+        >
+          GOES
+        </button>
+
+        <button
+          className={`layer-text-btn ${showIrEnhanced ? 'active' : ''}`}
+          onClick={toggleIrEnhanced}
+          title="GOES Enhanced IR"
+        >
+          GIR
+        </button>
+
+        <button
+          className={`layer-text-btn ${showTestLayer ? 'active' : ''}`}
           onClick={toggleTestLayer}
-          title="Test Layer (NASA GIBS VIIRS)"
+          title="NASA GIBS VIIRS Daily"
         >
-          🧪
+          VIIRS
         </button>
 
-        {/* New layers - all off by default */}
+        <div className="layer-divider" />
+
         <button
-          className={`layer-icon-btn ${showKbox ? 'active' : ''}`}
+          className={`layer-text-btn ${showRadar ? 'active' : ''}`}
+          onClick={toggleRadar}
+          title="RainViewer NEXRAD (animated)"
+        >
+          RAIN
+        </button>
+
+        <button
+          className={`layer-text-btn ${showKbox ? 'active' : ''}`}
           onClick={toggleKbox}
           title="KBOX Boston Radar"
         >
-          📡
+          KBOX
         </button>
 
         <button
-          className={`layer-icon-btn ${showGoesGeocolor ? 'active' : ''}`}
-          onClick={toggleGoesGeocolor}
-          title="GOES GeoColor (5 min, animated)"
-        >
-          🌥️
-        </button>
-
-        <button
-          className={`layer-icon-btn ${showMrms ? 'active' : ''}`}
+          className={`layer-text-btn ${showMrms ? 'active' : ''}`}
           onClick={toggleMrms}
           title="MRMS Composite Radar"
         >
-          🔬
+          MRMS
         </button>
 
         <button
-          className={`layer-icon-btn ${showIrEnhanced ? 'active' : ''}`}
-          onClick={toggleIrEnhanced}
-          title="Enhanced IR Satellite"
-        >
-          🌊
-        </button>
-
-        <button
-          className={`layer-icon-btn ${showIemAnimated ? 'active' : ''}`}
+          className={`layer-text-btn ${showIemAnimated ? 'active' : ''}`}
           onClick={toggleIemAnimated}
-          title="IEM Animated NEXRAD (alternative radar)"
+          title="IEM NEXRAD Composite (live)"
         >
-          💧
+          IEM
+        </button>
+
+        <button
+          className={`layer-text-btn ${showNwsRadar ? 'active' : ''}`}
+          onClick={toggleNwsRadar}
+          title="NWS Official Radar"
+        >
+          NWS
         </button>
       </div>
 

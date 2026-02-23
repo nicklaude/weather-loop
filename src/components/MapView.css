@@ -10,64 +10,62 @@
   overflow: hidden;
 }
 
-/* Layer Controls - Top Left, moved down to avoid nav controls */
+/* Layer Controls - Top Left, compact text buttons */
 .layer-controls {
   position: absolute;
-  top: 70px; /* Moved down from 12px */
-  left: 12px;
+  top: 12px;
+  left: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   z-index: 10;
 }
 
-/* Icon-only layer buttons */
-.layer-icon-btn {
+/* Compact text layer buttons */
+.layer-text-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: rgba(0, 0, 0, 0.75);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  font-size: 18px;
+  min-width: 44px;
+  height: 26px;
+  padding: 0 8px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: all 0.2s;
-  backdrop-filter: blur(10px);
+  transition: all 0.15s;
+  backdrop-filter: blur(8px);
   -webkit-tap-highlight-color: transparent;
+  text-transform: uppercase;
 }
 
-.layer-icon-btn:hover {
+.layer-text-btn:hover {
   background: rgba(0, 0, 0, 0.85);
   border-color: rgba(255, 255, 255, 0.4);
-  transform: scale(1.05);
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.layer-icon-btn:active {
-  transform: scale(0.95);
+.layer-text-btn:active {
+  transform: scale(0.97);
 }
 
-.layer-icon-btn.active {
+.layer-text-btn.active {
   border-color: rgba(34, 197, 94, 0.8);
-  background: rgba(34, 197, 94, 0.2);
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.25);
+  color: rgba(34, 197, 94, 1);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.2);
 }
 
-/* Test button styling */
-.layer-icon-btn.test-btn {
-  border-color: rgba(251, 146, 60, 0.4);
-}
-
-.layer-icon-btn.test-btn.active {
-  border-color: rgba(251, 146, 60, 0.8);
-  background: rgba(251, 146, 60, 0.2);
-  box-shadow: 0 0 12px rgba(251, 146, 60, 0.3);
-}
-
-/* Old styles - keep for reference but not used */
-.layer-btn {
-  display: none;
+/* Divider between satellite and radar sections */
+.layer-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 4px 0;
 }
 
 /* Radar Legend - Bottom Left */
@@ -302,15 +300,15 @@
 /* Mobile adjustments */
 @media (max-width: 480px) {
   .layer-controls {
-    top: 60px;
-    left: 8px;
+    top: 8px;
+    left: 6px;
   }
 
-  .layer-icon-btn {
-    width: 40px;
-    height: 40px;
-    font-size: 20px;
-    border-radius: 12px;
+  .layer-text-btn {
+    min-width: 40px;
+    height: 24px;
+    padding: 0 6px;
+    font-size: 9px;
   }
 
   .radar-legend {

@@ -117,6 +117,13 @@ const DATA_SOURCES: Omit<SourceTest, 'status'>[] = [
     url: 'https://tile.openweathermap.org/map/precipitation_new/5/9/12.png?appid=93dbf4ba0dab0ecc9247cdf226f39c5b',
     type: 'image',
   },
+
+  // === NWS OFFICIAL RADAR ===
+  {
+    name: 'NWS Radar (official NOAA)',
+    url: 'https://mapservices.weather.noaa.gov/eventdriven/services/radar/radar_base_reflectivity/MapServer/WMSServer?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=0&CRS=EPSG:3857&BBOX=-8766409.899970295,5009377.085697314,-7514065.628545966,6261721.357121642&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true',
+    type: 'image',
+  },
 ];
 
 async function testSource(source: Omit<SourceTest, 'status'>): Promise<SourceTest> {
