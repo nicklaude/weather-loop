@@ -475,6 +475,7 @@ export function MapView() {
   // The goesTimestamps state is no longer needed - we derive times from radar frames
 
   // Add/update radar layer when frames change
+  // Only update tiles if radar layer is visible to avoid unnecessary network requests
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || radarFrames.length === 0) return;
@@ -487,10 +488,12 @@ export function MapView() {
 
     try {
       if (map.getSource('radar')) {
-        // Update existing source
-        (map.getSource('radar') as maplibregl.RasterTileSource).setTiles([radarUrl]);
+        // Only update tiles if radar is visible
+        if (showRadar) {
+          (map.getSource('radar') as maplibregl.RasterTileSource).setTiles([radarUrl]);
+        }
       } else {
-        // Add radar source and layer
+        // Add radar source and layer (start hidden, only show when toggled on)
         map.addSource('radar', {
           type: 'raster',
           tiles: [radarUrl],
@@ -503,6 +506,9 @@ export function MapView() {
           source: 'radar',
           minzoom: 0,
           maxzoom: 7, // RainViewer only provides tiles up to zoom 7
+          layout: {
+            visibility: 'none', // Start hidden - toggle function will show it
+          },
           paint: {
             'raster-opacity': 0.75,
           },
@@ -511,7 +517,7 @@ export function MapView() {
     } catch (err) {
       console.error('Failed to update radar layer:', err);
     }
-  }, [radarFrames, currentFrameIndex, mapLoaded]);
+  }, [radarFrames, currentFrameIndex, mapLoaded, showRadar]);
 
   // Update GOES GeoColor tiles when slider moves (sync with radar time)
   // Only update if the GOES layer is visible to avoid unnecessary 404s
