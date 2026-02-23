@@ -1,73 +1,68 @@
-# React + TypeScript + Vite
+# Weather Loop
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A 3D globe weather radar viewer built with MapLibre GL JS. View live NEXRAD radar, satellite imagery, and more with smooth animations.
 
-Currently, two official plugins are available:
+**Live Demo:** https://nicklaude.github.io/weather-loop/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## React Compiler
+- **3D Globe View** - MapLibre GL JS 5.x with globe projection
+- **Multiple Radar Sources**
+  - RainViewer (animated NEXRAD)
+  - NWS Official Radar
+  - KBOX Boston single-site
+  - MRMS composite
+  - IEM NEXRAD
+- **Satellite Imagery**
+  - EOX Sentinel-2 true color base
+  - GOES-East/West GeoColor
+  - VIIRS daily
+  - Cloud IR
+- **Time Animation** - 2-hour radar history with playback controls
+- **Progressive Loading** - Current frame loads first, others load in background
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Architecture
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+Browser ── MapLibre ──► CF Worker Proxy ──► RainViewer/IEM/GIBS
+                              │
+                         Edge Cache (15min TTL)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The app uses a Cloudflare Worker as a tile proxy to:
+- Add CORS headers for cross-origin tile sources
+- Cache tiles at the edge (300+ global data centers)
+- Handle rate limiting gracefully
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Development
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+
+# Build for production
+npm run build
 ```
+
+## Deployment
+
+The app auto-deploys to GitHub Pages on push to `main`.
+
+For the Cloudflare Worker, see [docs/cloudflare-worker.md](docs/cloudflare-worker.md).
+
+## Data Sources
+
+| Source | Data | Update Frequency |
+|--------|------|------------------|
+| [RainViewer](https://www.rainviewer.com/api.html) | NEXRAD radar tiles | 10 min |
+| [NWS](https://www.weather.gov/) | Official radar WMS | 5 min |
+| [IEM](https://mesonet.agron.iastate.edu/) | KBOX, MRMS | 5 min |
+| [NASA GIBS](https://gibs.earthdata.nasa.gov/) | GOES, VIIRS satellite | 10 min |
+| [EOX](https://tiles.maps.eox.at/) | Sentinel-2 base map | Annual |
+
+## License
+
+MIT
