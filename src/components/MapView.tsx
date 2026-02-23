@@ -17,25 +17,6 @@ interface RainViewerData {
   };
 }
 
-// Convert unix timestamp to ISO8601 format for NASA GIBS (round to 10min intervals)
-// Returns null if timestamp is in the future (no data available yet)
-function formatGibsTimestamp(unixTime: number): string | null {
-  const now = Date.now();
-  const requestedTime = unixTime * 1000;
-
-  // If requested time is more than 20 minutes in the future, no data exists
-  // (GIBS has ~10-20 min latency for GOES imagery)
-  if (requestedTime > now + 20 * 60 * 1000) {
-    return null; // Signal to use latest available
-  }
-
-  // GIBS GOES updates every 10 minutes, round to nearest 10 min
-  const date = new Date(requestedTime);
-  const minutes = Math.floor(date.getUTCMinutes() / 10) * 10;
-  date.setUTCMinutes(minutes, 0, 0);
-  return date.toISOString().replace(/\.\d{3}Z$/, 'Z'); // e.g., "2026-02-22T22:00:00Z"
-}
-
 // Preload tile images in background for smoother transitions
 // Uses browser's built-in image cache
 // Returns a promise that resolves when all images are loaded
@@ -519,59 +500,9 @@ export function MapView() {
     }
   }, [radarFrames, currentFrameIndex, mapLoaded, showRadar]);
 
-  // Update GOES GeoColor tiles when slider moves (sync with radar time)
-  // Only update if the GOES layer is visible to avoid unnecessary 404s
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoaded || radarFrames.length === 0 || !showGoesGeocolor) return;
-
-    const currentFrame = radarFrames[currentFrameIndex];
-    if (!currentFrame) return;
-
-    // Convert radar timestamp to GIBS ISO8601 format (rounded to 10min)
-    const gibsTime = formatGibsTimestamp(currentFrame.time);
-
-    // Build the time-specific NASA GIBS tile URL
-    // If gibsTime is null (future time), use URL without timestamp to get latest available
-    const goesUrl = gibsTime
-      ? `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`
-      : `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
-
-    try {
-      if (map.getSource('goes-geocolor')) {
-        (map.getSource('goes-geocolor') as maplibregl.RasterTileSource).setTiles([goesUrl]);
-      }
-    } catch (err) {
-      console.error('Failed to update GOES GeoColor tiles:', err);
-    }
-  }, [radarFrames, currentFrameIndex, mapLoaded, showGoesGeocolor]);
-
-  // Update GOES-West tiles when slider moves (sync with radar time)
-  // Only update if the GOES-West layer is visible to avoid unnecessary 404s
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoaded || radarFrames.length === 0 || !showGoesWest) return;
-
-    const currentFrame = radarFrames[currentFrameIndex];
-    if (!currentFrame) return;
-
-    // Convert radar timestamp to GIBS ISO8601 format (rounded to 10min)
-    const gibsTime = formatGibsTimestamp(currentFrame.time);
-
-    // Build the time-specific NASA GIBS tile URL for GOES-West
-    // If gibsTime is null (future time), use URL without timestamp to get latest available
-    const goesWestUrl = gibsTime
-      ? `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`
-      : `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
-
-    try {
-      if (map.getSource('goes-west')) {
-        (map.getSource('goes-west') as maplibregl.RasterTileSource).setTiles([goesWestUrl]);
-      }
-    } catch (err) {
-      console.error('Failed to update GOES-West tiles:', err);
-    }
-  }, [radarFrames, currentFrameIndex, mapLoaded, showGoesWest]);
+  // GOES layers now just show latest imagery (no time sync)
+  // Time-synced GOES was causing 404s because GIBS doesn't have data for all timestamps
+  // The initial source URL already points to latest, so no dynamic update needed
 
   // Update KBOX radar tiles when slider moves (use IEM historical tiles)
   // Only update if KBOX layer is visible
@@ -653,65 +584,8 @@ export function MapView() {
     });
   }, [radarFrames, mapLoaded, showRadar]);
 
-  // Preload GOES-East frames when that layer is enabled
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoaded || radarFrames.length === 0 || !showGoesGeocolor) return;
-
-    const bounds = map.getBounds();
-    const currentZoom = map.getZoom();
-    const z = Math.min(7, Math.floor(currentZoom)); // GOES maxzoom is 7
-
-    const tiles = getTileCoords(bounds, z);
-    // Reduced tile count to avoid 503 errors
-    const limitedTiles = tiles.slice(0, 10);
-
-    const tilesToPreload: string[] = [];
-
-    // Preload GOES-East frames for current viewport (skip future times)
-    for (const frame of radarFrames) {
-      const gibsTime = formatGibsTimestamp(frame.time);
-      if (!gibsTime) continue; // Skip future frames
-      for (const tile of limitedTiles) {
-        tilesToPreload.push(
-          `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/${tile.z}/${tile.y}/${tile.x}.png`
-        );
-      }
-    }
-
-    console.log(`Preloading GOES-East tiles (${tilesToPreload.length} tiles)...`);
-    preloadTileUrls(tilesToPreload);
-  }, [radarFrames, showGoesGeocolor, mapLoaded]);
-
-  // Preload GOES-West frames when that layer is enabled
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoaded || radarFrames.length === 0 || !showGoesWest) return;
-
-    const bounds = map.getBounds();
-    const currentZoom = map.getZoom();
-    const z = Math.min(7, Math.floor(currentZoom)); // GOES maxzoom is 7
-
-    const tiles = getTileCoords(bounds, z);
-    // Reduced tile count to avoid 503 errors
-    const limitedTiles = tiles.slice(0, 10);
-
-    const tilesToPreload: string[] = [];
-
-    // Preload GOES-West frames for current viewport (skip future times)
-    for (const frame of radarFrames) {
-      const gibsTime = formatGibsTimestamp(frame.time);
-      if (!gibsTime) continue; // Skip future frames
-      for (const tile of limitedTiles) {
-        tilesToPreload.push(
-          `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-West_ABI_GeoColor/default/${gibsTime}/GoogleMapsCompatible_Level7/${tile.z}/${tile.y}/${tile.x}.png`
-        );
-      }
-    }
-
-    console.log(`Preloading GOES-West tiles (${tilesToPreload.length} tiles)...`);
-    preloadTileUrls(tilesToPreload);
-  }, [radarFrames, showGoesWest, mapLoaded]);
+  // GOES preloading removed - no time sync means we just use the static latest URL
+  // MapLibre will cache tiles automatically
 
   // Animation loop - use longer interval to avoid CORS/rate limit issues
   useEffect(() => {
