@@ -1,4 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+
+// Custom hook for debounced value
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { RefreshCw } from 'lucide-react';
@@ -20,7 +32,7 @@ interface RainViewerData {
 
 // Preload tile images in background for smoother transitions
 // Uses browser's built-in image cache
-// Returns a promise that resolves when all images are loaded
+// Progressive loading: loads frames with delay between each to avoid rate limits
 function preloadTileUrls(urls: string[], onProgress?: (loaded: number, total: number) => void): Promise<void> {
   return new Promise((resolve) => {
     if (urls.length === 0) {
@@ -47,6 +59,51 @@ function preloadTileUrls(urls: string[], onProgress?: (loaded: number, total: nu
     // Timeout fallback - don't wait forever
     setTimeout(() => resolve(), 30000);
   });
+}
+
+// Progressive preload: loads frame by frame with delays between
+// Priority order: current frame → newest → oldest → fill middle
+function progressivePreloadFrames(
+  frames: { path: string }[],
+  currentIndex: number,
+  tiles: { x: number; y: number; z: number }[],
+  getUrl: (framePath: string, tile: { x: number; y: number; z: number }) => string,
+  onProgress?: (loaded: number, total: number) => void
+): { cancel: () => void; promise: Promise<void> } {
+  let cancelled = false;
+  const totalTiles = frames.length * tiles.length;
+  let loadedTiles = 0;
+
+  // Build priority order: current, then newest to oldest, skipping current
+  const priorityOrder: number[] = [currentIndex];
+  for (let i = frames.length - 1; i >= 0; i--) {
+    if (i !== currentIndex) priorityOrder.push(i);
+  }
+
+  const promise = (async () => {
+    for (const frameIdx of priorityOrder) {
+      if (cancelled) return;
+
+      const frame = frames[frameIdx];
+      const frameTiles = tiles.map(tile => getUrl(frame.path, tile));
+
+      // Load all tiles for this frame
+      await preloadTileUrls(frameTiles, () => {
+        loadedTiles++;
+        onProgress?.(loadedTiles, totalTiles);
+      });
+
+      // Delay between frames (except for current frame which loads immediately)
+      if (frameIdx !== currentIndex && !cancelled) {
+        await new Promise(r => setTimeout(r, 100)); // 100ms between frames
+      }
+    }
+  })();
+
+  return {
+    cancel: () => { cancelled = true; },
+    promise,
+  };
 }
 
 // Get tile coordinates for a given bounds and zoom level
@@ -79,6 +136,8 @@ export function MapView() {
   const [preloadProgress, setPreloadProgress] = useState(0);
   const [radarFrames, setRadarFrames] = useState<RainViewerFrame[]>([]);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
+  // Debounce frame index for tile loading (150ms) - slider stays responsive
+  const debouncedFrameIndex = useDebouncedValue(currentFrameIndex, 150);
   const hasPreloadedRef = useRef(false); // Track if we've already preloaded
   const [showSatellite, setShowSatellite] = useState(false); // Grayscale satellite OFF by default
   const [showRadar, setShowRadar] = useState(false); // RainViewer radar OFF by default
@@ -463,16 +522,16 @@ export function MapView() {
   // The goesTimestamps state is no longer needed - we derive times from radar frames
 
   // Add/update radar layer when frames change
-  // Only update tiles if radar layer is visible to avoid unnecessary network requests
+  // Uses debounced frame index to avoid excessive tile requests during scrubbing
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || radarFrames.length === 0) return;
 
-    const currentFrame = radarFrames[currentFrameIndex];
+    const currentFrame = radarFrames[debouncedFrameIndex];
     if (!currentFrame) return;
 
     // Color scheme 2 = original, smooth=1, snow=1
-    // Proxy through Cloudflare Worker in production to avoid CORS/rate limiting
+    // Proxy through Cloudflare Worker in production for caching
     const radarUrl = proxyRainViewerUrl(`https://tilecache.rainviewer.com${currentFrame.path}/256/{z}/{x}/{y}/2/1_1.png`);
 
     try {
@@ -506,7 +565,7 @@ export function MapView() {
     } catch (err) {
       console.error('Failed to update radar layer:', err);
     }
-  }, [radarFrames, currentFrameIndex, mapLoaded, showRadar]);
+  }, [radarFrames, debouncedFrameIndex, mapLoaded, showRadar]);
 
   // GOES layers now just show latest imagery (no time sync)
   // Time-synced GOES was causing 404s because GIBS doesn't have data for all timestamps
@@ -514,11 +573,12 @@ export function MapView() {
 
   // Update KBOX radar tiles when slider moves (use IEM historical tiles)
   // Only update if KBOX layer is visible
+  // Uses debounced frame index for consistency with radar layer
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || radarFrames.length === 0 || !showKbox) return;
 
-    const currentFrame = radarFrames[currentFrameIndex];
+    const currentFrame = radarFrames[debouncedFrameIndex];
     if (!currentFrame) return;
 
     // Check if we're viewing recent data (within 10 minutes of now)
@@ -551,13 +611,23 @@ export function MapView() {
     } catch (err) {
       console.error('Failed to update KBOX tiles:', err);
     }
-  }, [radarFrames, currentFrameIndex, mapLoaded, showKbox]);
+  }, [radarFrames, debouncedFrameIndex, mapLoaded, showKbox]);
 
   // Preload radar frames when RAIN layer is enabled
-  // Only preload when layer is visible to avoid unnecessary network requests
+  // Uses progressive loading: current frame first, then others with delays
+  const preloadCancelRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded || radarFrames.length === 0 || !showRadar || hasPreloadedRef.current) return;
+    if (!map || !mapLoaded || radarFrames.length === 0 || !showRadar) return;
+
+    // Cancel any existing preload
+    if (preloadCancelRef.current) {
+      preloadCancelRef.current();
+    }
+
+    // Skip if already preloaded for this session
+    if (hasPreloadedRef.current) return;
 
     // Start preloading
     setIsPreloading(true);
@@ -569,31 +639,35 @@ export function MapView() {
 
     // Get tiles for current viewport
     const tiles = getTileCoords(bounds, z);
-    // Limit to reasonable number of tiles (reduced from 30 to 15 to avoid 503s)
+    // Limit to reasonable number of tiles
     const limitedTiles = tiles.slice(0, 15);
 
-    const tilesToPreload: string[] = [];
+    console.log(`Progressive preload: ${radarFrames.length} frames × ${limitedTiles.length} tiles = ${radarFrames.length * limitedTiles.length} total`);
 
-    // Preload RainViewer radar frames
-    // Use proxy in production for caching benefits
-    for (const frame of radarFrames) {
-      for (const tile of limitedTiles) {
-        tilesToPreload.push(
-          proxyRainViewerUrl(`https://tilecache.rainviewer.com${frame.path}/256/${tile.z}/${tile.x}/${tile.y}/2/1_1.png`)
-        );
+    const { cancel, promise } = progressivePreloadFrames(
+      radarFrames,
+      currentFrameIndex,
+      limitedTiles,
+      (framePath, tile) => proxyRainViewerUrl(
+        `https://tilecache.rainviewer.com${framePath}/256/${tile.z}/${tile.x}/${tile.y}/2/1_1.png`
+      ),
+      (loaded, total) => {
+        setPreloadProgress(Math.round((loaded / total) * 100));
       }
-    }
+    );
 
-    console.log(`Preloading ${radarFrames.length} radar frames (${tilesToPreload.length} total tiles)...`);
+    preloadCancelRef.current = cancel;
 
-    preloadTileUrls(tilesToPreload, (loaded, total) => {
-      setPreloadProgress(Math.round((loaded / total) * 100));
-    }).then(() => {
-      console.log('Preload complete!');
+    promise.then(() => {
+      console.log('Progressive preload complete!');
       setIsPreloading(false);
       setPreloadProgress(100);
     });
-  }, [radarFrames, mapLoaded, showRadar]);
+
+    return () => {
+      cancel();
+    };
+  }, [radarFrames, mapLoaded, showRadar, currentFrameIndex]);
 
   // GOES preloading removed - no time sync means we just use the static latest URL
   // MapLibre will cache tiles automatically
