@@ -2,7 +2,7 @@
 
 A 3D globe weather radar viewer built with MapLibre GL JS. View live NEXRAD radar, satellite imagery, and more with smooth animations.
 
-**Live Demo:** https://nicklaude.github.io/weather-loop/
+**Live Demo:** https://svenflow.github.io/weather-loop/
 
 ## Features
 
